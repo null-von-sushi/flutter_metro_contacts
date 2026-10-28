@@ -10,6 +10,10 @@ class WpButton extends StatefulWidget {
   final double borderWidth;
   final double fontSize;
 
+  /// Fill colour shown while the button is held down. Defaults to a
+  /// subtle dark grey; pass e.g. `AccentColor` for destructive actions.
+  final Color pressedColor;
+
   const WpButton({
     super.key,
     required this.label,
@@ -17,6 +21,7 @@ class WpButton extends StatefulWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
     this.borderWidth = 2,
     this.fontSize = 18,
+    this.pressedColor = const Color(0xFF2A2A2A),
   });
 
   @override
@@ -30,8 +35,7 @@ class _WpButtonState extends State<WpButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final foreground = enabled ? Colors.white : Colors.white30;
-    // Subtle press feedback: slightly lighter fill while held.
-    final fill = _pressed ? const Color(0xFF2A2A2A) : Colors.black;
+    final fill = _pressed ? widget.pressedColor : Colors.black;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

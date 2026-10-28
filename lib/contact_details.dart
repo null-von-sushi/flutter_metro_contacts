@@ -109,6 +109,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                   const SizedBox(width: 12),
                   WpButton(
                     label: 'delete',
+                    pressedColor: Colors.red,
                     onPressed: () {
                       Navigator.pop(context);
                       // TODO: call FlutterContacts.delete(widget.contact.id).
