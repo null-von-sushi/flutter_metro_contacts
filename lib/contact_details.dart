@@ -23,12 +23,27 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     Navigator.of(context).pop();
   }
 
+  String _formatBirthday(DateTime date) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final month = months[date.month - 1];
+    // Android stores "no year" as a placeholder like 1804; iOS uses 1604.
+    // Any year before 1900 is treated as "unknown".
+    if (date.year < 1900) {
+      return '${date.day} $month';
+    }
+    return '${date.day} $month ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.contact;
     final maxIndex = c.detailsMaxIndex;
+    final isBirthdayToday = c.isBirthdayToday;
 
-    int next = 2; // 0 = header, 1 = photo
+    int next = 2;
     int assign() {
       final i = next;
       if (next < maxIndex) next++;
@@ -36,7 +51,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     final children = <Widget>[
-      // Smallcaps page header + name (index 0)
+      // Header (index 0). Cake icon is inline with the name, only when
+      // the contact's birthday is today.
       FeatherLayer(
         index: 0,
         child: Padding(
@@ -54,15 +70,31 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                c.detailsTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      c.detailsTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w300,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  if (isBirthdayToday) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.cake_outlined,
+                      color: AccentColor,
+                      size: 26,
+                      semanticLabel: 'Birthday today',
+                    ),
+                  ],
+                ],
               ),
             ],
           ),
@@ -97,6 +129,16 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       children.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(header: a.header, value: a.formatted),
+      ));
+    }
+
+    if (c.birthday != null) {
+      children.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Birthday',
+          value: _formatBirthday(c.birthday!),
+        ),
       ));
     }
 
