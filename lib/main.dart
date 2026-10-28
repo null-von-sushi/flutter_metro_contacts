@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
+import 'package:wp_pivot_flutter/wp_components.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
 import 'contact_details.dart'; // <-- Imported the new page
@@ -142,11 +143,21 @@ class _PeoplePageState extends State<PeoplePage>
                     ({List<Contact> contacts, Contact? meContact})>(
                   future: _contactsFuture,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(
-                            color: Colors.white),
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return SizedBox.expand(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 48),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 4,
+                              child: WpProgressBar(
+                                semanticLabel: 'Loading contacts',
+                                color: AccentColor,
+                              ),
+                            ),
+                          ),
+                        ),
                       );
                     }
                     if (snapshot.hasError) {

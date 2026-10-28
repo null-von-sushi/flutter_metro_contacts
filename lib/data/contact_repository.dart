@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import '../other/constants.dart';
 import 'class_contact.dart';
@@ -6,6 +7,11 @@ const int _noYearSentinel = 1804;
 
 class ContactRepository {
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts() async {
+
+    if (kDebugMode) {
+      await Future.delayed(const Duration(seconds: 5));
+    }
+
     final status = await FlutterContacts.permissions.request(
       PermissionType.readWrite,
     );
