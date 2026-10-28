@@ -55,7 +55,8 @@ class ContactRepository {
     return (contacts: otherContacts, meContact: meContact);
   }
 
-  // ── Phones ─────────────────────────────────────────────────────────────
+  // ── Phones / Emails / Addresses / Notes ──────────────────────────────
+  // (unchanged — same as your current version)
 
   List<ContactPhone> _mapPhones(dynamic c) {
     final result = <ContactPhone>[];
@@ -72,8 +73,6 @@ class ContactRepository {
     return result;
   }
 
-  // ── Emails ─────────────────────────────────────────────────────────────
-
   List<ContactEmail> _mapEmails(dynamic c) {
     final result = <ContactEmail>[];
     try {
@@ -89,8 +88,6 @@ class ContactRepository {
     return result;
   }
 
-  // ── Addresses ──────────────────────────────────────────────────────────
-
   List<ContactAddress> _mapAddresses(dynamic c) {
     final result = <ContactAddress>[];
     try {
@@ -105,8 +102,6 @@ class ContactRepository {
     } catch (_) {}
     return result;
   }
-
-  // ── Notes ──────────────────────────────────────────────────────────────
 
   List<String> _mapNotes(dynamic c) {
     final result = <String>[];
@@ -126,46 +121,45 @@ class ContactRepository {
     return result;
   }
 
-  // ── Header derivation ──────────────────────────────────────────────────
+  // ── Header derivation ────────────────────────────────────────────────
 
   /// Produces the section header for a phone/email/address row.
-  /// - Standard label (home, work, mobile, …) → just the label name.
-  /// - Custom label → the custom label text (e.g. "iPhone").
-  /// - No label / unmappable → [fallback] ("Phone", "Email", "Address").
+  ///
+  /// Rules:
+  /// - **Custom label** (user-typed, e.g. "iPhone", "Mum's work") → verbatim.
+  ///   The user chose that casing; don't override it.
+  /// - **Standard label** (an enum value like `home`, `work`, `mobile`) →
+  ///   capitalized first letter (`Home`, `Work`, `Mobile`).
+  /// - **No usable label** → fallback ("Phone" / "Email" / "Address").
   String _headerFor(dynamic item, {required String fallback}) {
     final labelObj = _tryRead(item, 'label');
-    String? name = _labelDisplayName(labelObj);
 
-    // Some package versions store the custom label on the parent object
-    // instead of nested inside the label wrapper. Try that too.
-    if (name == null || name.toLowerCase() == 'custom') {
-      final custom = _tryRead(item, 'customLabel');
-      if (custom is String && custom.isNotEmpty) {
-        name = custom;
-      }
+    // 1. Custom label — try both the wrapper and the parent object.
+    final custom = _tryReadString(labelObj, 'customLabel') ??
+        _tryReadString(item, 'customLabel');
+    if (custom != null && custom.isNotEmpty) {
+      return custom; // verbatim
     }
 
-    if (name == null || name.isEmpty || name.toLowerCase() == 'custom') {
-      return fallback;
+    // 2. Standard label enum.
+    final standard = _labelDisplayName(labelObj);
+    if (standard != null &&
+        standard.isNotEmpty &&
+        standard.toLowerCase() != 'custom') {
+      return _capitalizeFirst(standard);
     }
-    return _capitalizeFirst(name);
+
+    // 3. Nothing usable.
+    return fallback;
   }
 
-  /// Extracts a human-readable name from a label value. Handles:
-  /// - A plain Dart enum (returns its `.name`).
-  /// - A wrapper class with `.label` (enum) and/or `.customLabel` (string).
-  /// - The stringified form `"Label(label: home)"`.
+  /// Extracts a standard label's bare name (e.g. `PhoneLabel.home` → "home").
+  /// Does **not** extract custom labels — those are handled by [_headerFor].
   String? _labelDisplayName(dynamic labelObj) {
     if (labelObj == null) return null;
     if (labelObj is String) return labelObj.isEmpty ? null : labelObj;
 
-    // 1. customLabel on the label object itself takes precedence.
-    try {
-      final custom = (labelObj as dynamic).customLabel;
-      if (custom is String && custom.isNotEmpty) return custom;
-    } catch (_) {}
-
-    // 2. The inner `.label` field (a real enum in most versions).
+    // The inner `.label` field (a real enum in most versions).
     try {
       final inner = (labelObj as dynamic).label;
       if (inner != null) {
@@ -174,25 +168,24 @@ class ContactRepository {
       }
     } catch (_) {}
 
-    // 3. `.name` directly (if labelObj IS the enum).
+    // `.name` directly (if labelObj IS the enum).
     try {
       final n = (labelObj as dynamic).name;
       if (n is String && n.isNotEmpty) return n;
     } catch (_) {}
 
-    // 4. Parse the stringified form "Label(label: home[, customLabel: x])".
+    // Parse the stringified form "Label(label: home[, customLabel: x])".
     final s = labelObj.toString();
     final m = RegExp(r'label:\s*([A-Za-z_][A-Za-z0-9_]*)').firstMatch(s);
     if (m != null) return m.group(1);
 
-    // 5. Last resort: "PhoneLabel.home" → "home".
+    // Last resort: "PhoneLabel.home" → "home".
     final parts = s.split('.');
     if (parts.length > 1) return parts.last;
 
     return null;
   }
 
-  /// Turns an enum-like value into its bare name (e.g. `PhoneLabel.home` → "home").
   String? _enumName(dynamic e) {
     if (e == null) return null;
     if (e is String) return e.isEmpty ? null : e;
@@ -209,8 +202,8 @@ class ContactRepository {
   String _capitalizeFirst(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 
-  /// Reads a field from a dynamic object, returning null on absence.
   dynamic _tryRead(dynamic item, String field) {
+    if (item == null) return null;
     try {
       switch (field) {
         case 'label':
@@ -222,7 +215,12 @@ class ContactRepository {
     return null;
   }
 
-  /// Turns an address object into a printable string.
+  String? _tryReadString(dynamic item, String field) {
+    final v = _tryRead(item, field);
+    if (v is String && v.isNotEmpty) return v;
+    return null;
+  }
+
   String _addressToString(dynamic a) {
     try {
       final formatted = a.formatted;

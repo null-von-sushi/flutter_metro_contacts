@@ -28,7 +28,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     final c = widget.contact;
     final maxIndex = c.detailsMaxIndex;
 
-    // Each section gets the next available index, capped at maxIndex.
     int next = 2; // 0 = header, 1 = photo
     int assign() {
       final i = next;
@@ -37,27 +36,32 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     final children = <Widget>[
-      // Header (index 0)
+      // Smallcaps page header + name (index 0)
       FeatherLayer(
         index: 0,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: _handleBack,
+              const Text(
+                'CONTACT',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                  color: Colors.white54,
+                ),
               ),
-              Expanded(
-                child: Text(
-                  c.detailsTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.white,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                c.detailsTitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white,
                 ),
               ),
             ],
@@ -75,7 +79,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ),
     ];
 
-    // Phone sections
     for (final p in c.phones) {
       children.add(FeatherLayer(
         index: assign(),
@@ -83,7 +86,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Email sections
     for (final e in c.emails) {
       children.add(FeatherLayer(
         index: assign(),
@@ -91,7 +93,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Address sections
     for (final a in c.addresses) {
       children.add(FeatherLayer(
         index: assign(),
@@ -99,7 +100,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Notes section
     if (c.notes.isNotEmpty) {
       children.add(FeatherLayer(
         index: assign(),
@@ -140,18 +140,31 @@ class _ProfilePhoto extends StatelessWidget {
         ? contact.name[0].toUpperCase()
         : '#';
 
-    return Container(
-      width: 160,
-      height: 160,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(color: AccentColor),
-      child: contact.photo != null
-          ? Image.memory(
-        contact.photo!,
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
         width: 160,
         height: 160,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Center(
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(color: AccentColor),
+        child: contact.photo != null
+            ? Image.memory(
+          contact.photo!,
+          width: 160,
+          height: 160,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Center(
+            child: Text(
+              letter,
+              style: const TextStyle(
+                fontSize: 80,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        )
+            : Center(
           child: Text(
             letter,
             style: const TextStyle(
@@ -159,16 +172,6 @@ class _ProfilePhoto extends StatelessWidget {
               fontWeight: FontWeight.w300,
               color: Colors.white,
             ),
-          ),
-        ),
-      )
-          : Center(
-        child: Text(
-          letter,
-          style: const TextStyle(
-            fontSize: 80,
-            fontWeight: FontWeight.w300,
-            color: Colors.white,
           ),
         ),
       ),
@@ -190,21 +193,20 @@ class _InfoSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            header.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: Colors.white54,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
+            header,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w300,
               color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w300,
+              color: AccentColor,
             ),
           ),
         ],
