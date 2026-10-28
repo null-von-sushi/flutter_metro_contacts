@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
@@ -219,8 +220,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         ),
         bottomNavigationBar: FeatherLayer(
           index: bottomBarIndex,
-          child: WpApplicationBar(
-            mode: WpApplicationBarMode.defaultMode,
+          child: WpBottomAppBar(
             actions: [
               WpApplicationBarAction(
                 icon: const Icon(Icons.edit_outlined, size: 20),

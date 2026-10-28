@@ -177,13 +177,24 @@ class _PeoplePageState extends State<PeoplePage>
             ),
           ),
         ),
-        bottomNavigationBar: FeatherLayer(
-          index: 1,
-          child: PeopleBottomBar(
-            onAdd: _addNewContact,
-            onSettings: _openSettings,
+          bottomNavigationBar: FeatherLayer(
+            index: 1,
+            child: WpBottomAppBar(
+              actions: [
+                WpApplicationBarAction(
+                  icon: const Icon(Icons.add, weight: 1000, size: 30, color: Colors.white),
+                  label: 'add',
+                  onPressed: _addNewContact,
+                ),
+              ],
+              menuItems: [
+                WpApplicationBarMenuItem(
+                  label: 'settings',
+                  onPressed: _openSettings,
+                ),
+              ],
+            ),
           ),
-        ),
       ),
     );
   }
