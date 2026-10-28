@@ -14,6 +14,10 @@ class MeTile extends StatelessWidget {
         ? contact.name[0].toUpperCase()
         : '#';
 
+    // Prefer the full-resolution photo when available; fall back to the
+    // thumbnail that was fetched with the list.
+    final bytes = contact.photoFull ?? contact.photo;
+
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -27,12 +31,16 @@ class MeTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AccentColor,
               ),
-              child: contact.photo != null
+              child: bytes != null
                   ? Image.memory(
-                contact.photo!,
+                bytes,
                 width: 120,
                 height: 120,
                 fit: BoxFit.cover,
+                // 120 px @ 3.5× ≈ 420 px. Decode at 360 (3×) for a
+                // good balance of sharpness and memory.
+                cacheWidth: 360,
+                cacheHeight: 360,
               )
                   : Center(
                 child: Text(
@@ -143,6 +151,10 @@ class ContactTile extends StatelessWidget {
                 width: 56,
                 height: 56,
                 fit: BoxFit.cover,
+                // 56 px @ 3.5× ≈ 196 px. Thumbnails are ~200 px, so
+                // a 168 px cache target keeps it crisp without waste.
+                cacheWidth: 168,
+                cacheHeight: 168,
               )
                   : Center(
                 child: Text(

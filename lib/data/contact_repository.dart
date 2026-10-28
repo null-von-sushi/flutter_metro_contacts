@@ -2,10 +2,6 @@ import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import '../other/constants.dart';
 import 'class_contact.dart';
 
-/// Sentinel year used when a birthday has no year recorded.
-/// 1804 matches the Android ContactsProvider convention, and is also
-/// below the `< 1900` threshold that ContactDetailsPage uses to decide
-/// whether to render the year.
 const int _noYearSentinel = 1804;
 
 class ContactRepository {
@@ -18,6 +14,7 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
+    // ── Pass 1: everyone, thumbnails only ────────────────────────────
     final rawContacts = await FlutterContacts.getAll(
       properties: {
         ContactProperty.name,
@@ -32,6 +29,7 @@ class ContactRepository {
 
     final List<Contact> otherContacts = [];
     Contact? meContact;
+    String? meId;
 
     for (final c in rawContacts) {
       final name = c.displayName;
@@ -45,6 +43,7 @@ class ContactRepository {
         nickname: nickname,
         status: ' ',
         photo: c.photo?.thumbnail,
+        photoFull: null, // filled in during pass 2 if this is Me
         isMe: isMe,
         phones: _mapPhones(c),
         emails: _mapEmails(c),
@@ -54,9 +53,28 @@ class ContactRepository {
       );
 
       if (isMe) {
-        meContact ??= contact;
+        if (meContact == null) {
+          meContact = contact;
+          meId = c.id;
+        }
       } else {
         otherContacts.add(contact);
+      }
+    }
+
+    // ── Pass 2: full-res photo for just the Me contact ──────────────
+    if (meId != null) {
+      try {
+        final full = await FlutterContacts.get(
+          meId,
+          properties: {ContactProperty.photoFullRes},
+        );
+        final bytes = full?.photo?.fullSize;
+        if (bytes != null && bytes.isNotEmpty) {
+          meContact = meContact!.copyWith(photoFull: bytes);
+        }
+      } catch (_) {
+        // Full-res fetch is best-effort; fall back to the thumbnail.
       }
     }
 
@@ -138,12 +156,9 @@ class ContactRepository {
         final labelName = _labelDisplayName(event.label);
         if (labelName?.toLowerCase() != 'birthday') continue;
 
-        // Path 1: direct DateTime / parseable string.
         final direct = _coerceToDateTime(_readRaw(event, 'date'));
         if (direct != null) return direct;
 
-        // Path 2: separate y/m/d. Year is allowed to be missing (year-less
-        // birthdays), in which case we use _noYearSentinel.
         final y = _asInt(_readRaw(event, 'year'));
         final m = _asInt(_readRaw(event, 'month'));
         final d = _asInt(_readRaw(event, 'day'));
@@ -152,7 +167,6 @@ class ContactRepository {
           return DateTime(year, m, d);
         }
 
-        // Path 3: string date in another field.
         for (final f in const [
           'dateString', 'startDate', 'start_date',
           'formatted', 'formattedDate', 'value',
@@ -168,7 +182,6 @@ class ContactRepository {
     return null;
   }
 
-  /// Safely coerces a value to int. Handles int, double, and numeric strings.
   int? _asInt(dynamic v) {
     if (v == null) return null;
     if (v is int) return v;
@@ -181,7 +194,6 @@ class ContactRepository {
     final trimmed = s.trim();
     if (trimmed.isEmpty) return null;
 
-    // Full ISO date. Year 0 is treated as "no year".
     final full = DateTime.tryParse(trimmed);
     if (full != null) {
       if (full.year >= 1 && full.year < 1900) {
@@ -190,7 +202,6 @@ class ContactRepository {
       if (full.year >= 1) return full;
     }
 
-    // Android's year-less format: "--MM-DD" or "--M-D".
     final partial = RegExp(r'^--(\d{1,2})-(\d{1,2})$').firstMatch(trimmed);
     if (partial != null) {
       final m = int.tryParse(partial.group(1)!);
@@ -200,7 +211,6 @@ class ContactRepository {
       }
     }
 
-    // "0000-MM-DD" or "0000/MM/DD".
     final zeroYear =
     RegExp(r'^0{4}[-/](\d{1,2})[-/](\d{1,2})').firstMatch(trimmed);
     if (zeroYear != null) {
@@ -218,8 +228,6 @@ class ContactRepository {
     if (raw == null) return null;
     if (raw is DateTime) {
       if (raw.year < 1) return null;
-      // Coerce tiny placeholder years into the sentinel so the formatter
-      // consistently treats them as year-less.
       if (raw.year < 1900) return DateTime(_noYearSentinel, raw.month, raw.day);
       return raw;
     }

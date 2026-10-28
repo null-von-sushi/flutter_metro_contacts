@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
+import 'widgets/bottom_app_bar.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -20,6 +23,29 @@ class ContactDetailsPage extends StatefulWidget {
 }
 
 class _ContactDetailsPageState extends State<ContactDetailsPage> {
+  Uint8List? _fullPhoto;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFullPhoto();
+  }
+
+  /// Fetch the full-resolution photo in the background. The list-level
+  /// thumbnail (widget.contact.photo) is shown until this completes.
+  Future<void> _loadFullPhoto() async {
+    try {
+      final full = await FlutterContacts.get(
+        widget.contact.id,
+        properties: {ContactProperty.photoFullRes},
+      );
+      final bytes = full?.photo?.fullSize;
+      if (bytes != null && bytes.isNotEmpty && mounted) {
+        setState(() => _fullPhoto = bytes);
+      }
+    } catch (_) {}
+  }
+
   void _handleBack() {
     widget.onPopStart?.call();
     Navigator.of(context).pop();
@@ -53,9 +79,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1F1F1F),
         title: const Text('Delete Contact'),
-        content: Text(
-          'Permanently delete ${widget.contact.name}?',
-        ),
+        content: Text('Permanently delete ${widget.contact.name}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -65,8 +89,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // TODO: call FlutterContacts.delete(widget.contact.id) and
-              // refresh the list on the previous page.
+              // TODO: call FlutterContacts.delete(widget.contact.id).
             },
             child: Text('Delete', style: TextStyle(color: AccentColor)),
           ),
@@ -81,8 +104,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       'July', 'August', 'September', 'October', 'November', 'December',
     ];
     final month = months[date.month - 1];
-    // Android stores "no year" as a placeholder like 1804; iOS uses 1604.
-    // Any year before 1900 is treated as "unknown".
     if (date.year < 1900) {
       return '${date.day} $month';
     }
@@ -150,12 +171,14 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           ),
         ),
       ),
-
       FeatherLayer(
         index: 1,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: _ProfilePhoto(contact: c),
+          child: _ProfilePhoto(
+            name: c.name,
+            photo: _fullPhoto ?? c.photo,
+          ),
         ),
       ),
     ];
@@ -201,7 +224,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Bottom bar is the last thing to animate, so it takes the last index.
     final bottomBarIndex = assign();
 
     return PopScope(
@@ -242,15 +264,14 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 }
 
 class _ProfilePhoto extends StatelessWidget {
-  final Contact contact;
+  final String name;
+  final Uint8List? photo;
 
-  const _ProfilePhoto({required this.contact});
+  const _ProfilePhoto({required this.name, required this.photo});
 
   @override
   Widget build(BuildContext context) {
-    final letter = contact.name.isNotEmpty
-        ? contact.name[0].toUpperCase()
-        : '#';
+    final letter = name.isNotEmpty ? name[0].toUpperCase() : '#';
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -259,12 +280,16 @@ class _ProfilePhoto extends StatelessWidget {
         height: 160,
         clipBehavior: Clip.hardEdge,
         decoration: BoxDecoration(color: AccentColor),
-        child: contact.photo != null
+        child: photo != null
             ? Image.memory(
-          contact.photo!,
+          photo!,
           width: 160,
           height: 160,
           fit: BoxFit.cover,
+          // Decode at ~3x display size for retina crispness without
+          // the memory cost of a full-resolution decode.
+          cacheWidth: 480,
+          cacheHeight: 480,
           errorBuilder: (context, error, stackTrace) => Center(
             child: Text(
               letter,

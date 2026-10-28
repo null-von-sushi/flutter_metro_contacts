@@ -24,14 +24,15 @@ class Contact {
   final String name;
   final String? nickname;
   final String status;
-  final Uint8List? photo;
+  final Uint8List? photo;       // thumbnail — used in the list
+  final Uint8List? photoFull;   // full-res — used in the Me tile and details
   final bool isMe;
 
   final List<ContactPhone> phones;
   final List<ContactEmail> emails;
   final List<ContactAddress> addresses;
   final List<String> notes;
-  final DateTime? birthday; // <-- new
+  final DateTime? birthday;
 
   const Contact({
     required this.id,
@@ -39,6 +40,7 @@ class Contact {
     this.nickname,
     required this.status,
     this.photo,
+    this.photoFull,
     this.isMe = false,
     this.phones = const [],
     this.emails = const [],
@@ -46,6 +48,36 @@ class Contact {
     this.notes = const [],
     this.birthday,
   });
+
+  Contact copyWith({
+    String? id,
+    String? name,
+    String? nickname,
+    String? status,
+    Uint8List? photo,
+    Uint8List? photoFull,
+    bool? isMe,
+    List<ContactPhone>? phones,
+    List<ContactEmail>? emails,
+    List<ContactAddress>? addresses,
+    List<String>? notes,
+    DateTime? birthday,
+  }) {
+    return Contact(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      nickname: nickname ?? this.nickname,
+      status: status ?? this.status,
+      photo: photo ?? this.photo,
+      photoFull: photoFull ?? this.photoFull,
+      isMe: isMe ?? this.isMe,
+      phones: phones ?? this.phones,
+      emails: emails ?? this.emails,
+      addresses: addresses ?? this.addresses,
+      notes: notes ?? this.notes,
+      birthday: birthday ?? this.birthday,
+    );
+  }
 
   String get displayTitle =>
       (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
@@ -64,14 +96,12 @@ class Contact {
     return name;
   }
 
-  /// True if today (month + day) matches the stored birthday.
   bool get isBirthdayToday {
     if (birthday == null) return false;
     final now = DateTime.now();
     return birthday!.month == now.month && birthday!.day == now.day;
   }
 
-  /// Highest FeatherLayer index the details page will use.
   int get detailsMaxIndex {
     int count = 2; // header + photo
     count += phones.length;
@@ -79,7 +109,7 @@ class Contact {
     count += addresses.length;
     if (birthday != null) count += 1;
     if (notes.isNotEmpty) count += 1;
-    count += 1; // <-- new: bottom application bar
+    count += 1; // bottom application bar
     return count - 1;
   }
 }
