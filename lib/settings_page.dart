@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
+import 'other/accent_color.dart';
 
 const Color wpAccentColor = Color(0xFFA20025);
 
@@ -57,6 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: WpToggleSwitch(
                 header: 'Prioritize Nicknames instead of legal names',
                 value: _prioritizeNicknames,
+                accentColor: AccentColor,
                 onChanged: (value) =>
                     setState(() => _prioritizeNicknames = value),
               ),
@@ -80,6 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: WpToggleSwitch(
                 header: 'Parse Notes for Accent Color',
+                accentColor: AccentColor,
                 value: _parseNotesForAccentColor,
                 onChanged: (value) =>
                     setState(() => _parseNotesForAccentColor = value),

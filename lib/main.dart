@@ -4,17 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:lpinyin/lpinyin.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'settings_page.dart';
+import 'data/class_contact.dart';
+import 'other/accent_color.dart';
+import 'logic/get_grouping_letter.dart';
+import 'other/constants.dart';
+import 'logic/pinyin_utils.dart'; // <-- Add this
+import 'logic/get_grouping_letter.dart'; // <-- Make sure this is here
 
 void main() => runApp(const MyApp());
-
-const Color wpAccentColor = Color(0xFFA20025);
-
-const Set<String> meStrings = {
-  'me', '我', 'yo', 'moi', 'ich', 'io', 'eu', 'я', '私', '나',
-};
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -42,7 +41,7 @@ class PeoplePage extends StatefulWidget {
 }
 
 class _PeoplePageState extends State<PeoplePage> {
-  late Future<({List<_Contact> contacts, _Contact? meContact})> _contactsFuture;
+  late Future<({List<Contact> contacts, Contact? meContact})> _contactsFuture;
 
   @override
   void initState() {
@@ -50,14 +49,14 @@ class _PeoplePageState extends State<PeoplePage> {
     _contactsFuture = _fetchContacts();
   }
 
-  Future<({List<_Contact> contacts, _Contact? meContact})> _fetchContacts() async {
+  Future<({List<Contact> contacts, Contact? meContact})> _fetchContacts() async {
     final status = await FlutterContacts.permissions.request(
       PermissionType.readWrite,
     );
 
     if (status != PermissionStatus.granted) {
       debugPrint('Permission denied by user.');
-      return (contacts: <_Contact>[], meContact: null);
+      return (contacts: <Contact>[], meContact: null);
     }
 
     final rawContacts = await FlutterContacts.getAll(
@@ -69,8 +68,8 @@ class _PeoplePageState extends State<PeoplePage> {
 
     debugPrint('Fetched ${rawContacts.length} contacts from device.');
 
-    final List<_Contact> otherContacts = [];
-    _Contact? meContact;
+    final List<Contact> otherContacts = [];
+    Contact? meContact;
 
     for (final c in rawContacts) {
       final name = c.displayName;
@@ -78,7 +77,7 @@ class _PeoplePageState extends State<PeoplePage> {
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
-      final contact = _Contact(
+      final contact = Contact(
         id: c.id ?? '',
         name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
         nickname: nickname,
@@ -117,7 +116,7 @@ class _PeoplePageState extends State<PeoplePage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Save', style: TextStyle(color: wpAccentColor)),
+            child: Text('Save', style: TextStyle(color: AccentColor)),
           ),
         ],
       ),
@@ -134,7 +133,7 @@ class _PeoplePageState extends State<PeoplePage> {
           tabTitles: const ['all', 'recent', 'rooms'],
           wrap: true,
           children: [
-            FutureBuilder<({List<_Contact> contacts, _Contact? meContact})>(
+            FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
               future: _contactsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -195,8 +194,8 @@ class _PeoplePageState extends State<PeoplePage> {
 
 /// A contact list with tile-based alphabetical grouping and a jump grid.
 class _ContactList extends StatefulWidget {
-  final List<_Contact> contacts;
-  final _Contact? meContact;
+  final List<Contact> contacts;
+  final Contact? meContact;
 
   const _ContactList({required this.contacts, this.meContact});
 
@@ -217,24 +216,24 @@ class _ContactListState extends State<_ContactList> {
   }
 
   void _buildGroupedEntries() {
-    final sorted = List<_Contact>.from(widget.contacts)
+    final sorted = List<Contact>.from(widget.contacts)
       ..sort((a, b) {
-        final keyA = _getGroupingLetter(a.name);
-        final keyB = _getGroupingLetter(b.name);
+        final keyA = getGroupingLetter(a.name);
+        final keyB = getGroupingLetter(b.name);
 
         if (keyA == '#' && keyB != '#') return 1;
         if (keyA != '#' && keyB == '#') return -1;
 
         if (keyA != keyB) return keyA.compareTo(keyB);
 
-        final pinyinA = PinyinHelper.getPinyin(a.name);
-        final pinyinB = PinyinHelper.getPinyin(b.name);
+        final pinyinA = PinyinUtils.getFullPinyin(a.name);
+        final pinyinB = PinyinUtils.getFullPinyin(b.name);
         return pinyinA.toLowerCase().compareTo(pinyinB.toLowerCase());
       });
 
-    final grouped = <String, List<_Contact>>{};
+    final grouped = <String, List<Contact>>{};
     for (final contact in sorted) {
-      final letter = _getGroupingLetter(contact.name);
+      final letter = getGroupingLetter(contact.name);
       grouped.putIfAbsent(letter, () => []).add(contact);
     }
 
@@ -314,7 +313,7 @@ class _ContactListState extends State<_ContactList> {
 
 /// The larger Windows Phone "Me" tile at the top of the list.
 class _MeTile extends StatelessWidget {
-  final _Contact contact;
+  final Contact contact;
 
   const _MeTile({required this.contact});
 
@@ -332,8 +331,8 @@ class _MeTile extends StatelessWidget {
             width: 120,
             height: 120,
             clipBehavior: Clip.hardEdge,
-            decoration: const BoxDecoration(
-              color: wpAccentColor,
+            decoration: BoxDecoration(
+              color: AccentColor,
             ),
             child: contact.photo != null
                 ? Image.memory(
@@ -367,12 +366,12 @@ class _MeTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'ME',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: wpAccentColor,
+                    color: AccentColor,
                   ),
                 ),
               ],
@@ -402,7 +401,7 @@ class _SectionHeaderTile extends StatelessWidget {
             child: Container(
               width: 56,
               height: 56,
-              color: wpAccentColor,
+              color: AccentColor,
               alignment: Alignment.center,
               child: Text(
                 letter,
@@ -453,7 +452,7 @@ class _LetterGridOverlay extends StatelessWidget {
                 return GestureDetector(
                   onTap: () => onLetterSelected(letter),
                   child: Container(
-                    color: wpAccentColor,
+                    color: AccentColor,
                     alignment: Alignment.center,
                     child: Text(
                       letter,
@@ -476,7 +475,7 @@ class _LetterGridOverlay extends StatelessWidget {
 
 /// A single contact row with a square avatar (photo or letter), name, and status.
 class _ContactTile extends StatelessWidget {
-  final _Contact contact;
+  final Contact contact;
 
   const _ContactTile({required this.contact});
 
@@ -549,7 +548,7 @@ class _ContactTile extends StatelessWidget {
 abstract class _ListEntry {}
 
 class _MeEntry extends _ListEntry {
-  final _Contact contact;
+  final Contact contact;
   _MeEntry(this.contact);
 }
 
@@ -559,53 +558,6 @@ class _HeaderEntry extends _ListEntry {
 }
 
 class _ContactEntry extends _ListEntry {
-  final _Contact contact;
+  final Contact contact;
   _ContactEntry(this.contact);
-}
-
-/// Data model for a contact, including a photo, nickname, and "Me" flag.
-class _Contact {
-  final String id;
-  final String name;
-  final String? nickname;
-  final String status;
-  final Uint8List? photo;
-  final bool isMe;
-
-  const _Contact({
-    required this.id,
-    required this.name,
-    this.nickname,
-    required this.status,
-    this.photo,
-    this.isMe = false,
-  });
-
-  String get displayTitle =>
-      (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
-
-  String get displaySubtitle {
-    if (nickname != null && nickname!.isNotEmpty && nickname != name) {
-      return name;
-    }
-    return status;
-  }
-}
-
-/// Extracts the first actual letter from a string, skipping spaces, quotes, numbers, etc.
-String _getGroupingLetter(String name) {
-  if (name.isEmpty) return '#';
-
-  for (int i = 0; i < name.length; i++) {
-    final char = name[i];
-
-    if (RegExp(r'\p{L}', unicode: true).hasMatch(char)) {
-      final pinyin = PinyinHelper.getPinyin(char);
-      if (pinyin.isNotEmpty) {
-        return pinyin[0].toUpperCase();
-      }
-    }
-  }
-
-  return '#';
 }
