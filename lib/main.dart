@@ -10,7 +10,8 @@ import 'transitions/wp_phone_transition.dart';
 
 void main() => runApp(const MyApp());
 
-const int _homeMaxIndex = 12;
+/// PeoplePage has exactly one FeatherLayer (the whole page block).
+const int _homeMaxIndex = 0;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -27,9 +28,7 @@ class MyApp extends StatelessWidget {
         pageTransitionsTheme: const PageTransitionsTheme(builders: {}),
       ),
       initialRoute: Navigator.defaultRouteName,
-      onGenerateRoute: (settings) => WpPhonePageRoute(
-        incomingMaxIndex: _homeMaxIndex,
-        outgoingMaxIndex: _homeMaxIndex,
+      onGenerateRoute: (settings) => MaterialPageRoute(
         settings: settings,
         builder: (_) => const PeoplePage(),
       ),
@@ -44,23 +43,44 @@ class PeoplePage extends StatefulWidget {
   State<PeoplePage> createState() => _PeoplePageState();
 }
 
-class _PeoplePageState extends State<PeoplePage> {
+class _PeoplePageState extends State<PeoplePage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _exitController;
   late Future<({List<Contact> contacts, Contact? meContact})> _contactsFuture;
   final _contactRepository = ContactRepository();
 
   @override
   void initState() {
     super.initState();
+    _exitController = AnimationController(
+      vsync: this,
+      duration: WpTurnstileFeatherTiming(
+        outgoingMaxIndex: _homeMaxIndex,
+        incomingMaxIndex: _homeMaxIndex,
+      ).routeDuration(),
+    );
     _contactsFuture = _contactRepository.fetchContacts();
   }
 
+  @override
+  void dispose() {
+    _exitController.dispose();
+    super.dispose();
+  }
+
   void _openSettings() {
-    pushWpPhonePage(
-      context,
-      const SettingsPage(),
-      incomingMaxIndex: 3,
-      outgoingMaxIndex: _homeMaxIndex,
-    );
+    _exitController.forward();
+    Navigator.of(context)
+        .push(
+      WpPhonePageRoute(
+        incomingMaxIndex: 0,
+        outgoingMaxIndex: _homeMaxIndex,
+        builder: (_) => const SettingsPage(),
+      ),
+    )
+        .then((_) {
+      _exitController.reverse();
+    });
   }
 
   void _addNewContact() {
@@ -86,51 +106,60 @@ class _PeoplePageState extends State<PeoplePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: WpPivotView(
-          title: 'PEOPLE',
-          tabTitles: const ['all', 'favorites', 'recent'],
-          wrap: true,
-          children: [
-            FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
-              future: _contactsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  );
-                }
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Text('Failed to load contacts',
-                        style: TextStyle(color: Colors.white)),
-                  );
-                }
-                final data = snapshot.data;
-                if (data == null || data.contacts.isEmpty) {
-                  return const Center(
-                    child: Text('No contacts found or permission denied.',
-                        style: TextStyle(color: Colors.white70)),
-                  );
-                }
-                return ContactList(
-                  contacts: data.contacts,
-                  meContact: data.meContact,
-                );
-              },
-            ),
-            const ContactList(contacts: []),
-            const ContactList(contacts: []),
-          ],
-        ),
+    final route = ModalRoute.of(context);
+    return WpPhoneFeatherScope(
+      timing: WpTurnstileFeatherTiming(
+        outgoingMaxIndex: _homeMaxIndex,
+        incomingMaxIndex: _homeMaxIndex,
       ),
-      bottomNavigationBar: FeatherLayer(
-        index: _homeMaxIndex,
-        child: PeopleBottomBar(
-          onAdd: _addNewContact,
-          onSettings: _openSettings,
+      animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
+      secondaryAnimation: _exitController,
+      child: FeatherLayer(
+        index: 0,
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: SafeArea(
+            child: WpPivotView(
+              title: 'PEOPLE',
+              tabTitles: const ['all', 'favorites', 'recent'],
+              wrap: true,
+              children: [
+                FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
+                  future: _contactsFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: Colors.white),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return const Center(
+                        child: Text('Failed to load contacts',
+                            style: TextStyle(color: Colors.white)),
+                      );
+                    }
+                    final data = snapshot.data;
+                    if (data == null || data.contacts.isEmpty) {
+                      return const Center(
+                        child: Text('No contacts found or permission denied.',
+                            style: TextStyle(color: Colors.white70)),
+                      );
+                    }
+                    return ContactList(
+                      contacts: data.contacts,
+                      meContact: data.meContact,
+                    );
+                  },
+                ),
+                const ContactList(contacts: []),
+                const ContactList(contacts: []),
+              ],
+            ),
+          ),
+          bottomNavigationBar: PeopleBottomBar(
+            onAdd: _addNewContact,
+            onSettings: _openSettings,
+          ),
         ),
       ),
     );

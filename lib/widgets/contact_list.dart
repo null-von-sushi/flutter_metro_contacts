@@ -3,7 +3,6 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../data/class_contact.dart';
 import '../data/list_entry.dart';
 import '../logic/contact_grouper.dart';
-import '../transitions/wp_phone_transition.dart';
 import 'contact_widgets.dart';
 import 'letter_grid_overlay.dart';
 
@@ -71,27 +70,17 @@ class ContactListState extends State<ContactList> {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       itemBuilder: (context, index) {
         final entry = _entries[index];
-        return FeatherLayer(
-          index: index > 12 ? 12 : index,
-          child: _buildEntryWidget(entry),
-        );
+        if (entry is MeEntry) {
+          return MeTile(contact: entry.contact);
+        }
+        if (entry is HeaderEntry) {
+          return SectionHeaderTile(
+            letter: entry.letter,
+            onTap: _showLetterGrid,
+          );
+        }
+        return ContactTile(contact: (entry as ContactEntry).contact);
       },
     );
-  }
-
-  Widget _buildEntryWidget(ListEntry entry) {
-    if (entry is MeEntry) {
-      return MeTile(contact: entry.contact);
-    }
-    if (entry is HeaderEntry) {
-      return SectionHeaderTile(
-        letter: entry.letter,
-        onTap: _showLetterGrid,
-      );
-    }
-    if (entry is ContactEntry) {
-      return ContactTile(contact: entry.contact);
-    }
-    return const SizedBox.shrink();
   }
 }

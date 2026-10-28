@@ -16,31 +16,33 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
+    // Wrap the whole scaffold in a FeatherLayer so the black background
+    // rotates in along with the toggles (instead of flashing instantly).
+    return FeatherLayer(
+      index: 0,
+      child: Scaffold(
         backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'settings',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w300,
-            color: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'settings',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w300,
+              color: Colors.white,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16.0),
-          children: [
-            const FeatherLayer(
-              index: 0,
-              child: Padding(
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            children: [
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
                   'CONTACT DISPLAY',
@@ -52,10 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-            ),
-            FeatherLayer(
-              index: 1,
-              child: Padding(
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: WpToggleSwitch(
                   header: 'Prioritize Nicknames instead of legal names',
@@ -65,11 +64,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       setState(() => _prioritizeNicknames = value),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const FeatherLayer(
-              index: 2,
-              child: Padding(
+              const SizedBox(height: 16),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Text(
                   'THEMING',
@@ -81,10 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-            ),
-            FeatherLayer(
-              index: 3,
-              child: Padding(
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: WpToggleSwitch(
                   header: 'Parse Notes for Accent Color',
@@ -94,8 +87,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       setState(() => _parseNotesForAccentColor = value),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

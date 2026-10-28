@@ -18,19 +18,22 @@ class WpToolkitExponentialEase extends Curve {
 
 /// Toolkit `TurnstileFeatherEffect` literals (WP8 DLL).
 class WpTurnstileFeather {
+  /// ⚠️ TESTING: set to 10 to slow animation down 10x. Set back to 1 for real speed.
+  static const int _slow = 10;
+
   static const double centerOfRotationX = -0.2;
-  static const int forwardInDurationMs = 350;
+  static const int forwardInDurationMs = 350 * _slow;
   static const double forwardInAngle = -80;
-  static const int forwardInDelayMs = 40;
-  static const int forwardOutDurationMs = 250;
+  static const int forwardInDelayMs = 40 * _slow;
+  static const int forwardOutDurationMs = 250 * _slow;
   static const double forwardOutAngle = 50;
-  static const int forwardOutDelayMs = 50;
-  static const int backwardInDurationMs = 350;
+  static const int forwardOutDelayMs = 50 * _slow;
+  static const int backwardInDurationMs = 350 * _slow;
   static const double backwardInAngle = 50;
-  static const int backwardInDelayMs = 50;
-  static const int backwardOutDurationMs = 250;
+  static const int backwardInDelayMs = 50 * _slow;
+  static const int backwardOutDurationMs = 250 * _slow;
   static const double backwardOutAngle = -80;
-  static const int backwardOutDelayMs = 40;
+  static const int backwardOutDelayMs = 40 * _slow;
 
   static const int detailPageMaxIndex = 2;
 
