@@ -31,8 +31,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _loadFullPhoto();
   }
 
-  /// Fetch the full-resolution photo in the background. The list-level
-  /// thumbnail (widget.contact.photo) is shown until this completes.
   Future<void> _loadFullPhoto() async {
     try {
       final full = await FlutterContacts.get(
@@ -79,7 +77,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       builder: (context) => Dialog(
         backgroundColor: const Color(0xFF1F1F1F),
         elevation: 0,
-        // Sharp corners — WP8.1 had no rounded UI elements.
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.zero,
         ),
@@ -149,89 +146,29 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       return i;
     }
 
-    final children = <Widget>[
-      FeatherLayer(
-        index: 0,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'CONTACT',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                  color: Colors.white54,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      c.detailsTitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  if (isBirthdayToday) ...[
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.cake_outlined,
-                      color: AccentColor,
-                      size: 26,
-                      semanticLabel: 'Birthday today',
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-      FeatherLayer(
-        index: 1,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: _ProfilePhoto(
-            name: c.name,
-            photo: _fullPhoto ?? c.photo,
-          ),
-        ),
-      ),
-    ];
-
+    // Build the scrollable info sections. These are the only things
+    // that scroll; the header and photo above them stay fixed.
+    final infoSections = <Widget>[];
     for (final p in c.phones) {
-      children.add(FeatherLayer(
+      infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(header: p.header, value: p.number),
       ));
     }
-
     for (final e in c.emails) {
-      children.add(FeatherLayer(
+      infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(header: e.header, value: e.address),
       ));
     }
-
     for (final a in c.addresses) {
-      children.add(FeatherLayer(
+      infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(header: a.header, value: a.formatted),
       ));
     }
-
     if (c.birthday != null) {
-      children.add(FeatherLayer(
+      infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Birthday',
@@ -239,9 +176,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         ),
       ));
     }
-
     if (c.notes.isNotEmpty) {
-      children.add(FeatherLayer(
+      infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Notes',
@@ -261,9 +197,78 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.only(bottom: 32),
-            children: children,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Fixed header (index 0)
+              FeatherLayer(
+                index: 0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'CONTACT',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.2,
+                          color: Colors.white54,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              c.detailsTitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          if (isBirthdayToday) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.cake_outlined,
+                              color: AccentColor,
+                              size: 26,
+                              semanticLabel: 'Birthday today',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Fixed profile photo (index 1)
+              FeatherLayer(
+                index: 1,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: _ProfilePhoto(
+                    name: c.name,
+                    photo: _fullPhoto ?? c.photo,
+                  ),
+                ),
+              ),
+
+              // Scrollable info sections
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 32),
+                  children: infoSections,
+                ),
+              ),
+            ],
           ),
         ),
         bottomNavigationBar: FeatherLayer(
@@ -312,8 +317,6 @@ class _ProfilePhoto extends StatelessWidget {
           width: 160,
           height: 160,
           fit: BoxFit.cover,
-          // Decode at ~3x display size for retina crispness without
-          // the memory cost of a full-resolution decode.
           cacheWidth: 480,
           cacheHeight: 480,
           errorBuilder: (context, error, stackTrace) => Center(
