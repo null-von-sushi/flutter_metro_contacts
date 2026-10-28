@@ -12,18 +12,8 @@ void main() => runApp(const MyApp());
 
 const Color wpAccentColor = Color(0xFFA20025);
 
-// A localized list of "Me" strings. If a nickname matches this, it becomes the Me tile.
 const Set<String> meStrings = {
-  'me',     // English
-  '我',     // Mandarin
-  'yo',     // Spanish
-  'moi',    // French
-  'ich',    // German
-  'io',     // Italian
-  'eu',     // Portuguese
-  'я',      // Russian
-  '私',     // Japanese
-  '나',     // Korean
+  'me', '我', 'yo', 'moi', 'ich', 'io', 'eu', 'я', '私', '나',
 };
 
 class MyApp extends StatelessWidget {
@@ -85,21 +75,19 @@ class _PeoplePageState extends State<PeoplePage> {
     for (final c in rawContacts) {
       final name = c.displayName;
       final nickname = c.name?.nickname;
-
-      // Check if the nickname is one of our "Me" strings
-      final isMe = nickname != null && meStrings.contains(nickname.trim().toLowerCase());
+      final isMe =
+          nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
       final contact = _Contact(
         id: c.id ?? '',
         name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
         nickname: nickname,
-        status: ' ', // The single space hack
+        status: ' ',
         photo: c.photo?.thumbnail,
         isMe: isMe,
       );
 
       if (isMe) {
-        // If there are multiple, pick the first one
         meContact ??= contact;
       } else {
         otherContacts.add(contact);
@@ -110,11 +98,8 @@ class _PeoplePageState extends State<PeoplePage> {
   }
 
   void _openSettings() {
-    pushWpPhonePage(
-      context,
-      const SettingsPage(),
-      incomingMaxIndex: 3, // The highest index in SettingsPage
-      outgoingMaxIndex: 1, // The highest index in PeoplePage (body is 0, app bar is 1)
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const SettingsPage()),
     );
   }
 
@@ -141,77 +126,68 @@ class _PeoplePageState extends State<PeoplePage> {
 
   @override
   Widget build(BuildContext context) {
-    return WpPhoneFeatherScaffold(
-      maxIndex: 1,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: FeatherLayer(
-            index: 0,
-            child: WpPivotView(
-              title: 'PEOPLE',
-              tabTitles: const ['all', 'recent', 'rooms'],
-              wrap: true,
-              children: [
-                FutureBuilder<({List<_Contact> contacts, _Contact? meContact})>(
-                  future: _contactsFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      );
-                    }
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: WpPivotView(
+          title: 'PEOPLE',
+          tabTitles: const ['all', 'recent', 'rooms'],
+          wrap: true,
+          children: [
+            FutureBuilder<({List<_Contact> contacts, _Contact? meContact})>(
+              future: _contactsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  );
+                }
 
-                    if (snapshot.hasError) {
-                      return const Center(
-                        child: Text(
-                          'Failed to load contacts',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      );
-                    }
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text(
+                      'Failed to load contacts',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  );
+                }
 
-                    final data = snapshot.data;
-                    if (data == null || data.contacts.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No contacts found or permission denied.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      );
-                    }
+                final data = snapshot.data;
+                if (data == null || data.contacts.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No contacts found or permission denied.',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
 
-                    return _ContactList(
-                      contacts: data.contacts,
-                      meContact: data.meContact,
-                    );
-                  },
-                ),
-                const _ContactList(contacts: []),
-                const _ContactList(contacts: []),
-              ],
+                return _ContactList(
+                  contacts: data.contacts,
+                  meContact: data.meContact,
+                );
+              },
             ),
-          ),
+            const _ContactList(contacts: []),
+            const _ContactList(contacts: []),
+          ],
         ),
-        bottomNavigationBar: FeatherLayer(
-          index: 1,
-          child: WpApplicationBar(
-            mode: WpApplicationBarMode.defaultMode,
-            actions: [
-              WpApplicationBarAction(
-                icon: const Icon(Icons.add, size: 20),
-                label: 'add',
-                onPressed: _addNewContact,
-              ),
-            ],
-            menuItems: [
-              WpApplicationBarMenuItem(
-                label: 'settings',
-                onPressed: _openSettings,
-              ),
-            ],
+      ),
+      bottomNavigationBar: WpApplicationBar(
+        mode: WpApplicationBarMode.defaultMode,
+        actions: [
+          WpApplicationBarAction(
+            icon: const Icon(Icons.add, size: 20),
+            label: 'add',
+            onPressed: _addNewContact,
           ),
-        ),
+        ],
+        menuItems: [
+          WpApplicationBarMenuItem(
+            label: 'settings',
+            onPressed: _openSettings,
+          ),
+        ],
       ),
     );
   }
@@ -266,12 +242,10 @@ class _ContactListState extends State<_ContactList> {
     _entries = [];
     _letterToIndex = {};
 
-    // 1. Add the Me Tile at the very top
     if (widget.meContact != null) {
       _entries.add(_MeEntry(widget.meContact!));
     }
 
-    // 2. Add the grouped contacts
     for (final letter in letters) {
       _letterToIndex[letter] = _entries.length;
       _entries.add(_HeaderEntry(letter));
@@ -614,7 +588,7 @@ class _Contact {
     if (nickname != null && nickname!.isNotEmpty && nickname != name) {
       return name;
     }
-    return  status;
+    return status;
   }
 }
 
