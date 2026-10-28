@@ -2,11 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
-import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
+import 'widgets/wp_button.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -76,24 +76,49 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   void _handleDelete() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => Dialog(
         backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Delete Contact'),
-        content: Text('Permanently delete ${widget.contact.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
+        elevation: 0,
+        // Sharp corners — WP8.1 had no rounded UI elements.
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Permanently delete ${widget.contact.name}?',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  WpButton(
+                    label: 'cancel',
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(width: 12),
+                  WpButton(
+                    label: 'delete',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      // TODO: call FlutterContacts.delete(widget.contact.id).
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // TODO: call FlutterContacts.delete(widget.contact.id).
-            },
-            child: Text('Delete', style: TextStyle(color: AccentColor)),
-          ),
-        ],
+        ),
       ),
     );
   }
