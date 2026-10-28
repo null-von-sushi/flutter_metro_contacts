@@ -109,7 +109,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                   const SizedBox(width: 12),
                   WpButton(
                     label: 'delete',
-                    pressedColor: Colors.red,
+                    pressedColor: Colors.red.shade700,
                     onPressed: () {
                       Navigator.pop(context);
                       // TODO: call FlutterContacts.delete(widget.contact.id).
@@ -367,7 +367,7 @@ class _InfoSection extends StatelessWidget {
           Text(
             value,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: 17,
               fontWeight: FontWeight.w300,
               color: AccentColor,
             ),
