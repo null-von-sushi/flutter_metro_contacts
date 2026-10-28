@@ -4,7 +4,9 @@ import '../other/accent_color.dart';
 
 class MeTile extends StatelessWidget {
   final Contact contact;
-  const MeTile({super.key, required this.contact});
+  final VoidCallback? onTap;
+
+  const MeTile({super.key, required this.contact, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -12,61 +14,64 @@ class MeTile extends StatelessWidget {
         ? contact.name[0].toUpperCase()
         : '#';
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-      child: Row(
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            clipBehavior: Clip.hardEdge,
-            decoration: BoxDecoration(
-              color: AccentColor,
-            ),
-            child: contact.photo != null
-                ? Image.memory(
-              contact.photo!,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+        child: Row(
+          children: [
+            Container(
               width: 120,
               height: 120,
-              fit: BoxFit.cover,
-            )
-                : Center(
-              child: Text(
-                avatarLetter,
-                style: const TextStyle(
-                  fontSize: 64,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                ),
+              clipBehavior: Clip.hardEdge,
+              decoration: BoxDecoration(
+                color: AccentColor,
               ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  contact.name,
+              child: contact.photo != null
+                  ? Image.memory(
+                contact.photo!,
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
+              )
+                  : Center(
+                child: Text(
+                  avatarLetter,
                   style: const TextStyle(
-                    fontSize: 28,
+                    fontSize: 64,
                     fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'ME',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AccentColor,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    contact.name,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w300,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'ME',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AccentColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -75,6 +80,7 @@ class MeTile extends StatelessWidget {
 class SectionHeaderTile extends StatelessWidget {
   final String letter;
   final VoidCallback onTap;
+
   const SectionHeaderTile({super.key, required this.letter, required this.onTap});
 
   @override
@@ -108,8 +114,9 @@ class SectionHeaderTile extends StatelessWidget {
 
 class ContactTile extends StatelessWidget {
   final Contact contact;
+  final VoidCallback? onTap;
 
-  const ContactTile({super.key, required this.contact});
+  const ContactTile({super.key, required this.contact, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -117,60 +124,63 @@ class ContactTile extends StatelessWidget {
         ? contact.name[0].toUpperCase()
         : '#';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            clipBehavior: Clip.hardEdge,
-            decoration: const BoxDecoration(
-              color: Colors.white24,
-            ),
-            child: contact.photo != null
-                ? Image.memory(
-              contact.photo!,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+        child: Row(
+          children: [
+            Container(
               width: 56,
               height: 56,
-              fit: BoxFit.cover,
-            )
-                : Center(
-              child: Text(
-                avatarLetter,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                ),
+              clipBehavior: Clip.hardEdge,
+              decoration: const BoxDecoration(
+                color: Colors.white24,
               ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  contact.displayTitle,
+              child: contact.photo != null
+                  ? Image.memory(
+                contact.photo!,
+                width: 56,
+                height: 56,
+                fit: BoxFit.cover,
+              )
+                  : Center(
+                child: Text(
+                  avatarLetter,
                   style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w400,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w300,
                     color: Colors.white,
                   ),
                 ),
-                if (contact.displaySubtitle.isNotEmpty)
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    contact.displaySubtitle,
+                    contact.displayTitle,
                     style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white54,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.white,
                     ),
                   ),
-              ],
+                  if (contact.displaySubtitle.isNotEmpty)
+                    Text(
+                      contact.displaySubtitle,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.white54,
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

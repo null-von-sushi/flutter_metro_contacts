@@ -3,6 +3,7 @@ import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
+import 'contact_details.dart'; // <-- Imported the new page
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'data/contact_repository.dart';
@@ -10,8 +11,8 @@ import 'transitions/wp_phone_transition.dart';
 
 void main() => runApp(const MyApp());
 
+/// Layers on PeoplePage: pivot=0, bottom bar=1.
 const int _homeMaxIndex = 1;
-const int _settingsMaxIndex = 4; // Settings has FeatherLayers 0..4
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -56,7 +57,7 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: _settingsMaxIndex,
+        incomingMaxIndex: 4,
       ).routeDuration(),
     );
     _contactsFuture = _contactRepository.fetchContacts();
@@ -72,9 +73,25 @@ class _PeoplePageState extends State<PeoplePage>
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: _settingsMaxIndex,
+        incomingMaxIndex: 4, // Settings has layers 0-4 now
         outgoingMaxIndex: _homeMaxIndex,
-        builder: (_) => SettingsPage(onPopStart: _exitController.reverse),
+        builder: (_) => SettingsPage(
+          onPopStart: _exitController.reverse,
+        ),
+      ),
+    );
+  }
+
+  void _openDetails(Contact contact) {
+    _exitController.forward();
+    Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: contact.detailsMaxIndex,
+        outgoingMaxIndex: _homeMaxIndex,
+        builder: (_) => ContactDetailsPage(
+          contact: contact,
+          onPopStart: _exitController.reverse,
+        ),
       ),
     );
   }
@@ -107,7 +124,7 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: _settingsMaxIndex,
+        incomingMaxIndex: 4,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,
@@ -150,6 +167,7 @@ class _PeoplePageState extends State<PeoplePage>
                     return ContactList(
                       contacts: data.contacts,
                       meContact: data.meContact,
+                      onContactTap: _openDetails, // <-- Wired up here
                     );
                   },
                 ),
