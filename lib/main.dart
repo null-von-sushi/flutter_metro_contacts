@@ -614,7 +614,7 @@ class _Contact {
     if (nickname != null && nickname!.isNotEmpty && nickname != name) {
       return name;
     }
-    return status;
+    return  status;
   }
 }
 
