@@ -89,7 +89,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                     const SizedBox(width: 8),
                     Icon(
                       Icons.cake_outlined,
-                      color: AccentColor,
+                      color: AccentColor, // Could also have been `Colors.white54`, consider it
                       size: 26,
                       semanticLabel: 'Birthday today',
                     ),
@@ -237,12 +237,12 @@ class _InfoSection extends StatelessWidget {
           Text(
             header,
             style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w300,
+              fontSize: 25,
+              fontWeight: FontWeight.w500,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 0),
           Text(
             value,
             style: TextStyle(
