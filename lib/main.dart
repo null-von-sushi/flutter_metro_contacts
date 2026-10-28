@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
-import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart'; // <-- Import the new bar
+import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'data/contact_repository.dart';
+import 'transitions/wp_phone_transition.dart';
 
 void main() => runApp(const MyApp());
+
+const int _homeMaxIndex = 12;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -21,8 +24,15 @@ class MyApp extends StatelessWidget {
         fontFamily: wpPivotFontFamily,
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
+        pageTransitionsTheme: const PageTransitionsTheme(builders: {}),
       ),
-      home: const PeoplePage(),
+      initialRoute: Navigator.defaultRouteName,
+      onGenerateRoute: (settings) => WpPhonePageRoute(
+        incomingMaxIndex: _homeMaxIndex,
+        outgoingMaxIndex: _homeMaxIndex,
+        settings: settings,
+        builder: (_) => const PeoplePage(),
+      ),
     );
   }
 }
@@ -36,7 +46,6 @@ class PeoplePage extends StatefulWidget {
 
 class _PeoplePageState extends State<PeoplePage> {
   late Future<({List<Contact> contacts, Contact? meContact})> _contactsFuture;
-
   final _contactRepository = ContactRepository();
 
   @override
@@ -46,8 +55,11 @@ class _PeoplePageState extends State<PeoplePage> {
   }
 
   void _openSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const SettingsPage()),
+    pushWpPhonePage(
+      context,
+      const SettingsPage(),
+      incomingMaxIndex: 3,
+      outgoingMaxIndex: _homeMaxIndex,
     );
   }
 
@@ -79,7 +91,7 @@ class _PeoplePageState extends State<PeoplePage> {
       body: SafeArea(
         child: WpPivotView(
           title: 'PEOPLE',
-          tabTitles: const ['all', 'recent', 'rooms'],
+          tabTitles: const ['all', 'favorites', 'recent'],
           wrap: true,
           children: [
             FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
@@ -90,21 +102,19 @@ class _PeoplePageState extends State<PeoplePage> {
                     child: CircularProgressIndicator(color: Colors.white),
                   );
                 }
-
                 if (snapshot.hasError) {
-                  return const Center(child: Text('Failed to load contacts', style: TextStyle(color: Colors.white)));
+                  return const Center(
+                    child: Text('Failed to load contacts',
+                        style: TextStyle(color: Colors.white)),
+                  );
                 }
-
                 final data = snapshot.data;
                 if (data == null || data.contacts.isEmpty) {
                   return const Center(
-                    child: Text(
-                      'No contacts found or permission denied.',
-                      style: TextStyle(color: Colors.white70),
-                    ),
+                    child: Text('No contacts found or permission denied.',
+                        style: TextStyle(color: Colors.white70)),
                   );
                 }
-
                 return ContactList(
                   contacts: data.contacts,
                   meContact: data.meContact,
@@ -116,10 +126,12 @@ class _PeoplePageState extends State<PeoplePage> {
           ],
         ),
       ),
-      // Use the new custom bar here
-      bottomNavigationBar: PeopleBottomBar(
-        onAdd: _addNewContact,
-        onSettings: _openSettings,
+      bottomNavigationBar: FeatherLayer(
+        index: _homeMaxIndex,
+        child: PeopleBottomBar(
+          onAdd: _addNewContact,
+          onSettings: _openSettings,
+        ),
       ),
     );
   }
