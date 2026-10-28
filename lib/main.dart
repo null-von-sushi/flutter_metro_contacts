@@ -10,8 +10,8 @@ import 'transitions/wp_phone_transition.dart';
 
 void main() => runApp(const MyApp());
 
-/// PeoplePage has exactly one FeatherLayer (the whole page block).
-const int _homeMaxIndex = 0;
+const int _homeMaxIndex = 1;
+const int _settingsMaxIndex = 4; // Settings has FeatherLayers 0..4
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -56,7 +56,7 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: _homeMaxIndex,
+        incomingMaxIndex: _settingsMaxIndex,
       ).routeDuration(),
     );
     _contactsFuture = _contactRepository.fetchContacts();
@@ -70,17 +70,13 @@ class _PeoplePageState extends State<PeoplePage>
 
   void _openSettings() {
     _exitController.forward();
-    Navigator.of(context)
-        .push(
+    Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 0,
+        incomingMaxIndex: _settingsMaxIndex,
         outgoingMaxIndex: _homeMaxIndex,
-        builder: (_) => const SettingsPage(),
+        builder: (_) => SettingsPage(onPopStart: _exitController.reverse),
       ),
-    )
-        .then((_) {
-      _exitController.reverse();
-    });
+    );
   }
 
   void _addNewContact() {
@@ -93,7 +89,8 @@ class _PeoplePageState extends State<PeoplePage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -110,26 +107,29 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: _homeMaxIndex,
+        incomingMaxIndex: _settingsMaxIndex,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,
-      child: FeatherLayer(
-        index: 0,
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: SafeArea(
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: FeatherLayer(
+            index: 0,
             child: WpPivotView(
               title: 'PEOPLE',
               tabTitles: const ['all', 'favorites', 'recent'],
               wrap: true,
               children: [
-                FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
+                FutureBuilder<
+                    ({List<Contact> contacts, Contact? meContact})>(
                   future: _contactsFuture,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting) {
                       return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                        child: CircularProgressIndicator(
+                            color: Colors.white),
                       );
                     }
                     if (snapshot.hasError) {
@@ -141,8 +141,10 @@ class _PeoplePageState extends State<PeoplePage>
                     final data = snapshot.data;
                     if (data == null || data.contacts.isEmpty) {
                       return const Center(
-                        child: Text('No contacts found or permission denied.',
-                            style: TextStyle(color: Colors.white70)),
+                        child: Text(
+                          'No contacts found or permission denied.',
+                          style: TextStyle(color: Colors.white70),
+                        ),
                       );
                     }
                     return ContactList(
@@ -156,7 +158,10 @@ class _PeoplePageState extends State<PeoplePage>
               ],
             ),
           ),
-          bottomNavigationBar: PeopleBottomBar(
+        ),
+        bottomNavigationBar: FeatherLayer(
+          index: 1,
+          child: PeopleBottomBar(
             onAdd: _addNewContact,
             onSettings: _openSettings,
           ),
