@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
@@ -21,6 +22,56 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   void _handleBack() {
     widget.onPopStart?.call();
     Navigator.of(context).pop();
+  }
+
+  void _handleEdit() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text('Edit Contact'),
+        content: const Text('Edit form will go here.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Save', style: TextStyle(color: AccentColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDelete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1F1F1F),
+        title: const Text('Delete Contact'),
+        content: Text(
+          'Permanently delete ${widget.contact.name}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: call FlutterContacts.delete(widget.contact.id) and
+              // refresh the list on the previous page.
+            },
+            child: Text('Delete', style: TextStyle(color: AccentColor)),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatBirthday(DateTime date) {
@@ -51,8 +102,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     final children = <Widget>[
-      // Header (index 0). Cake icon is inline with the name, only when
-      // the contact's birthday is today.
       FeatherLayer(
         index: 0,
         child: Padding(
@@ -89,7 +138,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                     const SizedBox(width: 8),
                     Icon(
                       Icons.cake_outlined,
-                      color: AccentColor, // Could also have been `Colors.white54`, consider it
+                      color: AccentColor,
                       size: 26,
                       semanticLabel: 'Birthday today',
                     ),
@@ -101,7 +150,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         ),
       ),
 
-      // Profile photo (index 1)
       FeatherLayer(
         index: 1,
         child: Padding(
@@ -152,6 +200,9 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
+    // Bottom bar is the last thing to animate, so it takes the last index.
+    final bottomBarIndex = assign();
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -164,6 +215,25 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           child: ListView(
             padding: const EdgeInsets.only(bottom: 32),
             children: children,
+          ),
+        ),
+        bottomNavigationBar: FeatherLayer(
+          index: bottomBarIndex,
+          child: WpApplicationBar(
+            mode: WpApplicationBarMode.defaultMode,
+            actions: [
+              WpApplicationBarAction(
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                label: 'edit',
+                onPressed: _handleEdit,
+              ),
+            ],
+            menuItems: [
+              WpApplicationBarMenuItem(
+                label: 'delete',
+                onPressed: _handleDelete,
+              ),
+            ],
           ),
         ),
       ),

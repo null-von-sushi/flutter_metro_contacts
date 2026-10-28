@@ -79,6 +79,7 @@ class Contact {
     count += addresses.length;
     if (birthday != null) count += 1;
     if (notes.isNotEmpty) count += 1;
+    count += 1; // <-- new: bottom application bar
     return count - 1;
   }
 }
