@@ -4,7 +4,7 @@ import '../data/class_contact.dart';
 import '../data/list_entry.dart';
 import '../logic/contact_grouper.dart';
 import 'contact_widgets.dart';
-import 'letter_grid_overlay.dart'; // Imports the tiles we just made
+import 'letter_grid_overlay.dart';
 
 class ContactList extends StatefulWidget {
   final List<Contact> contacts;
@@ -24,7 +24,6 @@ class ContactListState extends State<ContactList> {
   @override
   void initState() {
     super.initState();
-    // Use our new logic file!
     final result = groupContacts(widget.contacts, widget.meContact);
     _entries = result.entries;
     _letterToIndex = result.letterToIndex;
@@ -58,7 +57,10 @@ class ContactListState extends State<ContactList> {
   Widget build(BuildContext context) {
     if (_entries.isEmpty) {
       return const Center(
-        child: Text('No contacts in this category.', style: TextStyle(color: Colors.white54)),
+        child: Text(
+          'No contacts in this category.',
+          style: TextStyle(color: Colors.white54),
+        ),
       );
     }
 
@@ -72,7 +74,10 @@ class ContactListState extends State<ContactList> {
           return MeTile(contact: entry.contact);
         }
         if (entry is HeaderEntry) {
-          return SectionHeaderTile(letter: entry.letter, onTap: _showLetterGrid);
+          return SectionHeaderTile(
+            letter: entry.letter,
+            onTap: _showLetterGrid,
+          );
         }
         return ContactTile(contact: (entry as ContactEntry).contact);
       },
