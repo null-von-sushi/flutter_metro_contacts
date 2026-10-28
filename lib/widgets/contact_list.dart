@@ -9,8 +9,14 @@ import 'letter_grid_overlay.dart';
 class ContactList extends StatefulWidget {
   final List<Contact> contacts;
   final Contact? meContact;
+  final void Function(Contact)? onContactTap;
 
-  const ContactList({super.key, required this.contacts, this.meContact});
+  const ContactList({
+    super.key,
+    required this.contacts,
+    this.meContact,
+    this.onContactTap,
+  });
 
   @override
   State<ContactList> createState() => ContactListState();
@@ -71,7 +77,10 @@ class ContactListState extends State<ContactList> {
       itemBuilder: (context, index) {
         final entry = _entries[index];
         if (entry is MeEntry) {
-          return MeTile(contact: entry.contact);
+          return MeTile(
+            contact: entry.contact,
+            onTap: () => widget.onContactTap?.call(entry.contact),
+          );
         }
         if (entry is HeaderEntry) {
           return SectionHeaderTile(
@@ -79,7 +88,11 @@ class ContactListState extends State<ContactList> {
             onTap: _showLetterGrid,
           );
         }
-        return ContactTile(contact: (entry as ContactEntry).contact);
+        final contact = (entry as ContactEntry).contact;
+        return ContactTile(
+          contact: contact,
+          onTap: () => widget.onContactTap?.call(contact),
+        );
       },
     );
   }
