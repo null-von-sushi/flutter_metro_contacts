@@ -77,9 +77,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     );
   }
 
-  /// Normalises a phone number for messaging deep links. Ensures a leading
-  /// `+` so the number is interpreted as international, because both
-  /// Telegram and Signal need the country code to resolve the account.
   String _internationalise(String number) {
     final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
     if (cleaned.isEmpty) return '';
@@ -93,6 +90,15 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       return;
     }
     _launchUri(Uri(scheme: 'tel', path: cleaned), 'No dialer app found');
+  }
+
+  void _sendSms(String number) {
+    final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.isEmpty) {
+      _showError('No number to message');
+      return;
+    }
+    _launchUri(Uri(scheme: 'sms', path: cleaned), 'No messaging app found');
   }
 
   void _sendEmail(String address) {
@@ -125,8 +131,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       _showError('No Telegram number');
       return;
     }
-    // tg://resolve?phone=... opens the Telegram app directly to that chat.
-    // If Telegram isn't installed, launchUrl fails and _showError fires.
     _launchUri(
       Uri.parse('tg://resolve?phone=$target'),
       'Telegram not installed',
@@ -139,8 +143,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       _showError('No Signal number');
       return;
     }
-    // signal.me opens the Signal app directly, or falls back to the Signal
-    // website (which prompts to install) if no app is registered.
     _launchUri(
       Uri.parse('https://signal.me/#p/$target'),
       'Signal not installed',
@@ -251,66 +253,80 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
     final infoSections = <Widget>[];
 
-    // Each phone number gets a "call" section.
+    // Phones: two sections each, "Call X" and "Text X".
     for (final p in c.phones) {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: p.header,
+          header: 'Call ${p.header}',
           value: p.number,
           onTap: () => _callNumber(p.number),
         ),
       ));
-    }
-
-    // One Telegram entry per contact, using the primary phone number.
-    // (A contact's Telegram account is tied to one number, not to every
-    // number in the aggregated contact.)
-    if (c.hasTelegram && c.phones.isNotEmpty) {
-      final primary = c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Telegram',
-          value: primary,
-          onTap: () => _openTelegram(primary),
+          header: 'Text ${p.header}',
+          value: p.number,
+          onTap: () => _sendSms(p.number),
         ),
       ));
     }
 
-    // One Signal entry per contact, same reasoning.
+    // Signal: one section per contact, using the primary number.
     if (c.hasSignal && c.phones.isNotEmpty) {
       final primary = c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Signal',
+          header: 'Contact via Signal',
           value: primary,
           onTap: () => _openSignal(primary),
         ),
       ));
     }
 
-    for (final e in c.emails) {
+    // Telegram: same pattern.
+    if (c.hasTelegram && c.phones.isNotEmpty) {
+      final primary = c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: e.header,
+          header: 'Contact via Telegram',
+          value: primary,
+          onTap: () => _openTelegram(primary),
+        ),
+      ));
+    }
+
+    // Emails: "Email" if unlabeled, "Email Home"/"Email Work" otherwise.
+    for (final e in c.emails) {
+      final header = e.header == 'Email' ? 'Email' : 'Email ${e.header}';
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: header,
           value: e.address,
           onTap: () => _sendEmail(e.address),
         ),
       ));
     }
+
+    // Addresses: "Show on Map" if unlabeled, "Show Home on Map" otherwise.
     for (final a in c.addresses) {
+      final header = a.header == 'Address'
+          ? 'Show on Map'
+          : 'Show ${a.header} on Map';
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: a.header,
+          header: header,
           value: a.formatted,
           onTap: () => _openAddress(a.formatted),
         ),
       ));
     }
+
     if (c.birthday != null) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -320,6 +336,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         ),
       ));
     }
+
     if (c.notes.isNotEmpty) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -500,6 +517,7 @@ class _ProfilePhoto extends StatelessWidget {
   }
 }
 
+/// A section with a header (verb + type) and a single value underneath.
 class _InfoSection extends StatelessWidget {
   final String header;
   final String value;

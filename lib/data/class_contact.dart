@@ -123,9 +123,9 @@ class Contact {
   /// addresses, birthday, notes, and finally the bottom app bar.
   int get detailsMaxIndex {
     int count = 2; // header + photo
-    count += phones.length;
-    if (hasTelegram && phones.isNotEmpty) count += 1;
+    count += phones.length * 2; // "Call X" + "Text X" per number
     if (hasSignal && phones.isNotEmpty) count += 1;
+    if (hasTelegram && phones.isNotEmpty) count += 1;
     count += emails.length;
     count += addresses.length;
     if (birthday != null) count += 1;
