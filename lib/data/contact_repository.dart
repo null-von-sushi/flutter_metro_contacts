@@ -19,7 +19,6 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
-    // ── Pass 1: everyone, thumbnails only ────────────────────────────
     final fetchedContacts = await FlutterContacts.getAll(
       properties: {
         ContactProperty.name,
@@ -29,7 +28,7 @@ class ContactRepository {
         ContactProperty.address,
         ContactProperty.note,
         ContactProperty.event,
-        ContactProperty.identifiers, // populates c.android.identifiers.rawContacts
+        ContactProperty.identifiers,
       },
     );
 
@@ -43,25 +42,24 @@ class ContactRepository {
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
-      // Correct path: Contact → android → identifiers → rawContacts → account
-      final rawRows = c.android?.identifiers?.rawContacts ?? const [];
+      // ── Messenger detection: account type OR phone label ──────────
+      final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
+          .map((rc) => rc.account?.type)
+          .whereType<String>()
+          .toList();
 
-      // Diagnostic — remove once the messenger detection is confirmed working.
-      if (rawRows.isNotEmpty) {
-        debugPrint(
-          'RAW ${c.displayName}: '
-              '${rawRows.map((rc) => rc.account?.toString()).toList()}',
-        );
-      }
-
-      final hasTelegram = rawRows.any(
-            (rc) => rc.account?.type != null &&
-            MessagingAccountTypes.telegramMessenger.contains(rc.account!.type),
-      );
-      final hasSignal = rawRows.any(
-            (rc) => rc.account?.type != null &&
-            MessagingAccountTypes.signalMessenger.contains(rc.account!.type),
-      );
+      final hasTelegram = accountTypes.any(
+        MessagingAccountTypes.telegramMessenger.contains,
+      ) ||
+          _hasMessengerLabel(c, MessagingAccountTypes.telegramMessengerLabels);
+      final hasSignal = accountTypes.any(
+        MessagingAccountTypes.signalMessenger.contains,
+      ) ||
+          _hasMessengerLabel(c, MessagingAccountTypes.signalMessengerLabels);
+      final hasWeChat = accountTypes.any(
+        MessagingAccountTypes.weChatMessenger.contains,
+      ) ||
+          _hasMessengerLabel(c, MessagingAccountTypes.weChatMessengerLabels);
 
       final contact = Contact(
         id: c.id ?? '',
@@ -78,6 +76,7 @@ class ContactRepository {
         birthday: _extractBirthday(c),
         hasTelegram: hasTelegram,
         hasSignal: hasSignal,
+        hasWeChat: hasWeChat,
       );
 
       if (isMe) {
@@ -90,7 +89,6 @@ class ContactRepository {
       }
     }
 
-    // ── Pass 2: full-res photo for just the Me contact ──────────────
     if (meId != null) {
       try {
         final full = await FlutterContacts.get(
@@ -105,6 +103,25 @@ class ContactRepository {
     }
 
     return (contacts: otherContacts, meContact: meContact);
+  }
+
+  /// Returns true if any of the contact's phone numbers carries a label
+  /// matching one of [messengerLabels] (case-insensitive).
+  ///
+  /// Uses the resolved display header — the same string the details page
+  /// shows — so a number the user labelled "Telegram" or "telegram" both
+  /// match, and a number labelled with the standard `mobile`/`home`
+  /// enums never does.
+  bool _hasMessengerLabel(dynamic c, List<String> messengerLabels) {
+    try {
+      for (final p in (c.phones as List)) {
+        final header = _headerFor(p, fallback: '').toLowerCase();
+        if (header.isNotEmpty && messengerLabels.contains(header)) {
+          return true;
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   // ── Phones / Emails / Addresses / Notes ─────────────────────────────

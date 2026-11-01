@@ -17,6 +17,10 @@ class MessagingAccountTypes {
     'im.molly.app.socket',        // Molly Socket variant
   ];
 
+  static const List<String> signalMessengerLabels = [
+    'signal',
+  ];
+
   /// Known identifiers and account types for Telegram and its forks
   static const List<String> telegramMessenger = [
     'org.telegram.messenger',     // Official Telegram (Play Store)
@@ -30,5 +34,18 @@ class MessagingAccountTypes {
     'org.vidogram.messenger',     // Vidogram
     'com.turrit.app',             // Turrit
     'com.mdgram.messenger',       // MDGram
+  ];
+
+  static const List<String> telegramMessengerLabels = [
+    'telegram'
+  ];
+
+  static const List<String> weChatMessenger = [
+    'com.tencent.mm',       // WeChat, kinda moot since this piece of shit doesn't actually allow anything and I pity anyone who has to suffer it's use. Consider switching to carrier pidgeon. Or at least physical mail.
+  ];
+
+  static const List<String> weChatMessengerLabels = [
+    'weixin',
+    'wechat',
   ];
 }

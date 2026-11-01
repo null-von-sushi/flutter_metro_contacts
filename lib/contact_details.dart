@@ -259,7 +259,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Call ${p.header}',
+          header: 'Call ${p.header} number',
           value: p.number,
           onTap: () => _callNumber(p.number),
         ),
@@ -267,7 +267,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Text ${p.header}',
+          header: 'Text ${p.header} number',
           value: p.number,
           onTap: () => _sendSms(p.number),
         ),
@@ -296,6 +296,19 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           header: 'Contact via Telegram',
           value: primary,
           onTap: () => _openTelegram(primary),
+        ),
+      ));
+    }
+
+    // wechat, nothing we can do because it's cancer
+    if (c.hasWeChat && c.phones.isNotEmpty) {
+      final primary = c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Contact via WeChat',
+          value: primary,
+          // No onTap: WeChat has no deep link for chat-by-phone.
         ),
       ));
     }

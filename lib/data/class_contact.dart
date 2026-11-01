@@ -24,8 +24,8 @@ class Contact {
   final String name;
   final String? nickname;
   final String status;
-  final Uint8List? photo;       // thumbnail — used in the list
-  final Uint8List? photoFull;   // full-res — used in the Me tile and details
+  final Uint8List? photo;
+  final Uint8List? photoFull;
   final bool isMe;
 
   final List<ContactPhone> phones;
@@ -34,12 +34,17 @@ class Contact {
   final List<String> notes;
   final DateTime? birthday;
 
-  /// True if this contact has a raw entry owned by a Telegram app
-  /// (or one of its known forks). See MessagingAccountTypes.
+  /// True if this contact is on Telegram, either via a raw-contact entry
+  /// owned by a known Telegram package or via a phone number labelled
+  /// with one of the Telegram labels ("telegram").
   final bool hasTelegram;
 
-  /// True if this contact has a raw entry owned by Signal or a fork.
+  /// Same logic for Signal.
   final bool hasSignal;
+
+  /// Same logic for WeChat. Note that WeChat has no reliable deep link
+  /// for opening a specific chat, so the UI section is display-only.
+  final bool hasWeChat;
 
   const Contact({
     required this.id,
@@ -56,6 +61,7 @@ class Contact {
     this.birthday,
     this.hasTelegram = false,
     this.hasSignal = false,
+    this.hasWeChat = false,
   });
 
   Contact copyWith({
@@ -73,6 +79,7 @@ class Contact {
     DateTime? birthday,
     bool? hasTelegram,
     bool? hasSignal,
+    bool? hasWeChat,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -89,6 +96,7 @@ class Contact {
       birthday: birthday ?? this.birthday,
       hasTelegram: hasTelegram ?? this.hasTelegram,
       hasSignal: hasSignal ?? this.hasSignal,
+      hasWeChat: hasWeChat ?? this.hasWeChat,
     );
   }
 
@@ -115,17 +123,12 @@ class Contact {
     return birthday!.month == now.month && birthday!.day == now.day;
   }
 
-  /// Highest FeatherLayer index used by ContactDetailsPage.
-  ///
-  /// Matches the layout in contact_details.dart:
-  /// 0 = header, 1 = photo, then one section per phone, one Telegram
-  /// section if present, one Signal section if present, then emails,
-  /// addresses, birthday, notes, and finally the bottom app bar.
   int get detailsMaxIndex {
     int count = 2; // header + photo
     count += phones.length * 2; // "Call X" + "Text X" per number
     if (hasSignal && phones.isNotEmpty) count += 1;
     if (hasTelegram && phones.isNotEmpty) count += 1;
+    if (hasWeChat && phones.isNotEmpty) count += 1;
     count += emails.length;
     count += addresses.length;
     if (birthday != null) count += 1;
