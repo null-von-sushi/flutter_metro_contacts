@@ -9,6 +9,7 @@ import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
+import 'other/wp_text.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -537,7 +538,7 @@ class _InfoSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            header,
+          wpLowercase(header), // ← single point of application,
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.w500,
