@@ -34,6 +34,13 @@ class Contact {
   final List<String> notes;
   final DateTime? birthday;
 
+  /// True if this contact has a raw entry owned by a Telegram app
+  /// (or one of its known forks). See MessagingAccountTypes.
+  final bool hasTelegram;
+
+  /// True if this contact has a raw entry owned by Signal or a fork.
+  final bool hasSignal;
+
   const Contact({
     required this.id,
     required this.name,
@@ -47,6 +54,8 @@ class Contact {
     this.addresses = const [],
     this.notes = const [],
     this.birthday,
+    this.hasTelegram = false,
+    this.hasSignal = false,
   });
 
   Contact copyWith({
@@ -62,6 +71,8 @@ class Contact {
     List<ContactAddress>? addresses,
     List<String>? notes,
     DateTime? birthday,
+    bool? hasTelegram,
+    bool? hasSignal,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -76,6 +87,8 @@ class Contact {
       addresses: addresses ?? this.addresses,
       notes: notes ?? this.notes,
       birthday: birthday ?? this.birthday,
+      hasTelegram: hasTelegram ?? this.hasTelegram,
+      hasSignal: hasSignal ?? this.hasSignal,
     );
   }
 
@@ -102,9 +115,17 @@ class Contact {
     return birthday!.month == now.month && birthday!.day == now.day;
   }
 
+  /// Highest FeatherLayer index used by ContactDetailsPage.
+  ///
+  /// Matches the layout in contact_details.dart:
+  /// 0 = header, 1 = photo, then one section per phone, one Telegram
+  /// section if present, one Signal section if present, then emails,
+  /// addresses, birthday, notes, and finally the bottom app bar.
   int get detailsMaxIndex {
     int count = 2; // header + photo
     count += phones.length;
+    if (hasTelegram && phones.isNotEmpty) count += 1;
+    if (hasSignal && phones.isNotEmpty) count += 1;
     count += emails.length;
     count += addresses.length;
     if (birthday != null) count += 1;

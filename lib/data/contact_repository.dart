@@ -7,7 +7,6 @@ const int _noYearSentinel = 1804;
 
 class ContactRepository {
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts() async {
-
     if (kDebugMode) {
       await Future.delayed(const Duration(seconds: 5));
     }
@@ -21,7 +20,7 @@ class ContactRepository {
     }
 
     // ── Pass 1: everyone, thumbnails only ────────────────────────────
-    final rawContacts = await FlutterContacts.getAll(
+    final fetchedContacts = await FlutterContacts.getAll(
       properties: {
         ContactProperty.name,
         ContactProperty.photoThumbnail,
@@ -30,6 +29,7 @@ class ContactRepository {
         ContactProperty.address,
         ContactProperty.note,
         ContactProperty.event,
+        ContactProperty.identifiers, // populates c.android.identifiers.rawContacts
       },
     );
 
@@ -37,11 +37,31 @@ class ContactRepository {
     Contact? meContact;
     String? meId;
 
-    for (final c in rawContacts) {
+    for (final c in fetchedContacts) {
       final name = c.displayName;
       final nickname = c.name?.nickname;
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
+
+      // Correct path: Contact → android → identifiers → rawContacts → account
+      final rawRows = c.android?.identifiers?.rawContacts ?? const [];
+
+      // Diagnostic — remove once the messenger detection is confirmed working.
+      if (rawRows.isNotEmpty) {
+        debugPrint(
+          'RAW ${c.displayName}: '
+              '${rawRows.map((rc) => rc.account?.toString()).toList()}',
+        );
+      }
+
+      final hasTelegram = rawRows.any(
+            (rc) => rc.account?.type != null &&
+            MessagingAccountTypes.telegramMessenger.contains(rc.account!.type),
+      );
+      final hasSignal = rawRows.any(
+            (rc) => rc.account?.type != null &&
+            MessagingAccountTypes.signalMessenger.contains(rc.account!.type),
+      );
 
       final contact = Contact(
         id: c.id ?? '',
@@ -49,13 +69,15 @@ class ContactRepository {
         nickname: nickname,
         status: ' ',
         photo: c.photo?.thumbnail,
-        photoFull: null, // filled in during pass 2 if this is Me
+        photoFull: null,
         isMe: isMe,
         phones: _mapPhones(c),
         emails: _mapEmails(c),
         addresses: _mapAddresses(c),
         notes: _mapNotes(c),
         birthday: _extractBirthday(c),
+        hasTelegram: hasTelegram,
+        hasSignal: hasSignal,
       );
 
       if (isMe) {
@@ -79,9 +101,7 @@ class ContactRepository {
         if (bytes != null && bytes.isNotEmpty) {
           meContact = meContact!.copyWith(photoFull: bytes);
         }
-      } catch (_) {
-        // Full-res fetch is best-effort; fall back to the thumbnail.
-      }
+      } catch (_) {}
     }
 
     return (contacts: otherContacts, meContact: meContact);

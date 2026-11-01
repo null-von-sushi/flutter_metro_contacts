@@ -77,9 +77,15 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     );
   }
 
-  /// Builds a `tel:` URI. Strips everything except digits and a leading `+`,
-  /// because dialers expect a clean number even though they tolerate spaces
-  /// and dashes.
+  /// Normalises a phone number for messaging deep links. Ensures a leading
+  /// `+` so the number is interpreted as international, because both
+  /// Telegram and Signal need the country code to resolve the account.
+  String _internationalise(String number) {
+    final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.isEmpty) return '';
+    return cleaned.startsWith('+') ? cleaned : '+$cleaned';
+  }
+
   void _callNumber(String number) {
     final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
     if (cleaned.isEmpty) {
@@ -90,15 +96,9 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   }
 
   void _sendEmail(String address) {
-    _launchUri(
-      Uri(scheme: 'mailto', path: address),
-      'No email app found',
-    );
+    _launchUri(Uri(scheme: 'mailto', path: address), 'No email app found');
   }
 
-  /// Opens the address in a maps app. Uses `geo:` first (which opens any
-  /// installed maps app), then falls back to Google Maps in a browser if
-  /// no maps app is installed.
   Future<void> _openAddress(String address) async {
     HapticFeedback.lightImpact();
     final encoded = Uri.encodeComponent(address);
@@ -117,6 +117,34 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       }
     } catch (_) {}
     _showError('No maps app found');
+  }
+
+  void _openTelegram(String number) {
+    final target = _internationalise(number);
+    if (target.isEmpty) {
+      _showError('No Telegram number');
+      return;
+    }
+    // tg://resolve?phone=... opens the Telegram app directly to that chat.
+    // If Telegram isn't installed, launchUrl fails and _showError fires.
+    _launchUri(
+      Uri.parse('tg://resolve?phone=$target'),
+      'Telegram not installed',
+    );
+  }
+
+  void _openSignal(String number) {
+    final target = _internationalise(number);
+    if (target.isEmpty) {
+      _showError('No Signal number');
+      return;
+    }
+    // signal.me opens the Signal app directly, or falls back to the Signal
+    // website (which prompts to install) if no app is registered.
+    _launchUri(
+      Uri.parse('https://signal.me/#p/$target'),
+      'Signal not installed',
+    );
   }
 
   // ── Existing dialogs ──────────────────────────────────────────────
@@ -222,6 +250,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     final infoSections = <Widget>[];
+
+    // Each phone number gets a "call" section.
     for (final p in c.phones) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -232,6 +262,35 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         ),
       ));
     }
+
+    // One Telegram entry per contact, using the primary phone number.
+    // (A contact's Telegram account is tied to one number, not to every
+    // number in the aggregated contact.)
+    if (c.hasTelegram && c.phones.isNotEmpty) {
+      final primary = c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Telegram',
+          value: primary,
+          onTap: () => _openTelegram(primary),
+        ),
+      ));
+    }
+
+    // One Signal entry per contact, same reasoning.
+    if (c.hasSignal && c.phones.isNotEmpty) {
+      final primary = c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Signal',
+          value: primary,
+          onTap: () => _openSignal(primary),
+        ),
+      ));
+    }
+
     for (final e in c.emails) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -258,7 +317,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Birthday',
           value: _formatBirthday(c.birthday!),
-          // Birthday has no tap action.
         ),
       ));
     }
@@ -268,7 +326,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Notes',
           value: c.notes.join('\n\n'),
-          // Notes have no tap action.
         ),
       ));
     }
@@ -485,8 +542,6 @@ class _InfoSection extends StatelessWidget {
     if (onTap == null) return content;
     return InkWell(
       onTap: onTap,
-      // WP8.1 had no Material ripple, but a subtle highlight matches
-      // the "press" affordance the platform did have.
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.white.withOpacity(0.06),
       child: content,
