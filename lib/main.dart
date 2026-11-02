@@ -9,11 +9,16 @@ import 'data/class_contact.dart';
 import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'data/contact_repository.dart';
+import 'services/metrov_theme_service.dart';
 import 'transitions/wp_phone_transition.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await Settings.load();
+  // Fetch MetroV accent before first frame. Null if MetroV not installed
+  // or permission not granted; in that case the user's selection (or the
+  // fallback) is used.
+  MetrovAccent = await MetrovThemeService.getAccentColor();
   runApp(MyApp(appSettings: settings));
 }
 
@@ -29,9 +34,33 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   @override
+  void initState() {
+    super.initState();
+    _recomputeAccent();
+    widget.appSettings.selectedAccentArgb.addListener(_onAccentChanged);
+    widget.appSettings.useLauncherAccent.addListener(_onAccentChanged);
+  }
+
+  @override
   void dispose() {
+    widget.appSettings.selectedAccentArgb.removeListener(_onAccentChanged);
+    widget.appSettings.useLauncherAccent.removeListener(_onAccentChanged);
     widget.appSettings.dispose();
     super.dispose();
+  }
+
+  void _onAccentChanged() {
+    setState(_recomputeAccent);
+  }
+
+  void _recomputeAccent() {
+    final useLauncher = widget.appSettings.useLauncherAccent.value;
+    final metroV = MetrovAccent;
+    if (useLauncher && metroV != null) {
+      AccentColor = metroV;
+    } else {
+      AccentColor = Color(widget.appSettings.selectedAccentArgb.value);
+    }
   }
 
   @override
@@ -115,7 +144,7 @@ class _PeoplePageState extends State<PeoplePage>
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 5,
+        incomingMaxIndex: 10,
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => SettingsPage(
           onPopStart: _exitController.reverse,
@@ -168,7 +197,7 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 5,
+        incomingMaxIndex: 10,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,
@@ -227,7 +256,6 @@ class _PeoplePageState extends State<PeoplePage>
                     );
                   },
                 ),
-                // Favorites and Recent pivots intentionally empty for now.
                 ContactList(contacts: const [], settings: widget.settings),
                 ContactList(contacts: const [], settings: widget.settings),
               ],

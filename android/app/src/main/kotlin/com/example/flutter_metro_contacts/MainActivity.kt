@@ -1,6 +1,7 @@
 package com.example.flutter_metro_contacts
 
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.provider.ContactsContract
 import io.flutter.embedding.android.FlutterActivity
@@ -13,11 +14,12 @@ class MainActivity : FlutterActivity() {
         "com.example.flutter_metro_contacts/package_check"
     private val groupsChannelName =
         "com.example.flutter_metro_contacts/groups"
+    private val metrovThemeChannelName =
+        "com.example.flutter_metro_contacts/metrov_theme"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // ── Existing package check channel ──────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, packageCheckChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -47,7 +49,6 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        // ── New groups channel ──────────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, groupsChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -61,12 +62,36 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, metrovThemeChannelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getAccentArgb" -> {
+                        try {
+                            val uri = Uri.parse("content://com.tuzkituan.metrov.theme/theme")
+                            contentResolver.query(
+                                uri,
+                                arrayOf("accent_argb"),
+                                null, null, null
+                            )?.use { c ->
+                                if (c.moveToFirst()) {
+                                    result.success(c.getLong(0).toInt())
+                                } else {
+                                    result.success(null)
+                                }
+                            } ?: result.success(null)
+                        } catch (e: SecurityException) {
+                            // Permission not granted (app installed before MetroV).
+                            result.error("PERMISSION_DENIED", e.message, null)
+                        } catch (e: Exception) {
+                            result.error("QUERY_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
-    /// Queries ContactsContract.Groups directly. Returns a list of maps
-    /// with the keys "id", "title", "accountType", "accountName".
-    /// This bypasses flutter_contacts entirely because its groups API
-    /// returns an empty list on some devices/accounts.
     private fun queryGroups(): List<Map<String, String>> {
         val groups = mutableListOf<Map<String, String>>()
         val projection = arrayOf(
@@ -75,7 +100,6 @@ class MainActivity : FlutterActivity() {
             ContactsContract.Groups.ACCOUNT_TYPE,
             ContactsContract.Groups.ACCOUNT_NAME
         )
-        // Exclude rows that have been deleted but not yet purged.
         val selection = "${ContactsContract.Groups.DELETED} = 0"
 
         contentResolver.query(

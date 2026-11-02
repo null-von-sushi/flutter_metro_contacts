@@ -5,6 +5,7 @@ import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/contact_repository.dart';
 import 'data/group_query.dart';
 import 'other/accent_color.dart';
+import 'other/constants.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/wp_button.dart';
@@ -13,7 +14,8 @@ const _packageCheckChannel = MethodChannel(
   'com.example.flutter_metro_contacts/package_check',
 );
 
-const _metroVPackage = 'com.tuzkituan.metrov.navbar';
+const _metroVNavbarPackage = 'com.tuzkituan.metrov.navbar';
+const _metroVLauncherPackage = 'com.tuzkituan.metrov';
 
 const _barBackgroundHex = '#1F1F1F';
 
@@ -32,7 +34,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool? _metroVInstalled;
+  bool? _metroVNavbarInstalled;
+  bool? _metroVLauncherInstalled;
 
   String? _accountDisplayName;
   String? _groupDisplayName;
@@ -40,7 +43,8 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _checkMetroVInstalled();
+    _checkMetroVNavbarInstalled();
+    _checkMetroVLauncherInstalled();
     _refreshFilterDisplayNames();
     widget.settings.accountFilter.addListener(_refreshFilterDisplayNames);
     widget.settings.groupFilter.addListener(_refreshFilterDisplayNames);
@@ -95,15 +99,31 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
-  Future<void> _checkMetroVInstalled() async {
+  Future<void> _checkMetroVNavbarInstalled() async {
     try {
       final installed = await _packageCheckChannel.invokeMethod<bool>(
         'isPackageInstalled',
-        {'packageName': _metroVPackage},
+        {'packageName': _metroVNavbarPackage},
       );
-      if (mounted) setState(() => _metroVInstalled = installed ?? false);
+      if (mounted) {
+        setState(() => _metroVNavbarInstalled = installed ?? false);
+      }
     } catch (_) {
-      if (mounted) setState(() => _metroVInstalled = false);
+      if (mounted) setState(() => _metroVNavbarInstalled = false);
+    }
+  }
+
+  Future<void> _checkMetroVLauncherInstalled() async {
+    try {
+      final installed = await _packageCheckChannel.invokeMethod<bool>(
+        'isPackageInstalled',
+        {'packageName': _metroVLauncherPackage},
+      );
+      if (mounted) {
+        setState(() => _metroVLauncherInstalled = installed ?? false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _metroVLauncherInstalled = false);
     }
   }
 
@@ -137,14 +157,14 @@ class _SettingsPageState extends State<SettingsPage> {
     final selected = await showDialog<String?>(
       context: context,
       barrierColor: Colors.black87,
-      builder: (ctx) => _ChoiceDialog(
+      builder: (ctx) => _ChoiceDialog<String>(
         title: 'Account',
         options: [
-          const _ChoiceOption(
+          const _ChoiceOption<String>(
               id: '__all__', label: 'all accounts', subtitle: ''),
           for (final raw in accounts)
             if (raw != null)
-              _ChoiceOption(
+              _ChoiceOption<String>(
                 id: ContactRepository.accountKey(raw),
                 label: (raw.name?.isNotEmpty ?? false)
                     ? raw.name!
@@ -186,17 +206,13 @@ class _SettingsPageState extends State<SettingsPage> {
     final selected = await showDialog<String?>(
       context: context,
       barrierColor: Colors.black87,
-      builder: (ctx) => _ChoiceDialog(
+      builder: (ctx) => _ChoiceDialog<String>(
         title: 'Group',
         options: [
-          const _ChoiceOption(
+          const _ChoiceOption<String>(
               id: '__all__', label: 'all groups in account', subtitle: ''),
           for (final g in groups)
-            _ChoiceOption(
-              id: g.id,
-              label: g.title,
-              subtitle: '',
-            ),
+            _ChoiceOption<String>(id: g.id, label: g.title),
         ],
         currentId: widget.settings.groupFilter.value ?? '__all__',
       ),
@@ -208,6 +224,30 @@ class _SettingsPageState extends State<SettingsPage> {
     selected == '__all__' ? null : selected;
   }
 
+  // ── Accent color picker ─────────────────────────────────────────────
+
+  Future<void> _pickAccentColor() async {
+    final currentArgb = widget.settings.selectedAccentArgb.value;
+    final selected = await showDialog<int?>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => _ChoiceDialog<int>(
+        title: 'Accent colour',
+        options: [
+          for (final entry in wpAccentPalette.entries)
+            _ChoiceOption<int>(
+              id: entry.value,
+              label: entry.key,
+              swatch: Color(entry.value),
+            ),
+        ],
+        currentId: currentArgb,
+      ),
+    );
+    if (!mounted || selected == null) return;
+    widget.settings.selectedAccentArgb.value = selected;
+  }
+
   Future<List<Account?>> _loadAccounts() async {
     try {
       final list = await FlutterContacts.accounts.getAll();
@@ -217,18 +257,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// Loads groups scoped to [accountKey] by querying Android's
-  /// ContactsContract.Groups table directly through a MethodChannel.
-  /// This bypasses flutter_contacts.groups.getAll(), which returns an
-  /// empty list on some devices.
   Future<List<NativeGroup>> _loadGroups(String accountKey) async {
     final all = await GroupQuery.fetchAll();
     if (all.isEmpty) return const [];
-
     final filtered = all.where((g) => g.accountKey == accountKey).toList();
-    // Fall back to showing all groups if the account scoping excludes
-    // everything — the accountName in ContactsContract.Groups can be
-    // slightly different from Account.name on some sync adapters.
     return filtered.isNotEmpty ? filtered : all;
   }
 
@@ -254,6 +286,16 @@ class _SettingsPageState extends State<SettingsPage> {
     final groupLabel = widget.settings.groupFilter.value == null
         ? 'all groups'
         : (_groupDisplayName ?? widget.settings.groupFilter.value!);
+    final selectedArgb = widget.settings.selectedAccentArgb.value;
+    final accentName = wpAccentPalette.entries
+        .firstWhere(
+          (e) => e.value == selectedArgb,
+      orElse: () => MapEntry(
+        'custom (#${selectedArgb.toRadixString(16).padLeft(8, '0').toUpperCase()})',
+        selectedArgb,
+      ),
+    )
+        .key;
 
     return PopScope(
       canPop: false,
@@ -306,6 +348,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
+                        // ── SHOWING ─────────────────────────────────
                         const FeatherLayer(
                           index: 1,
                           child: Padding(
@@ -341,6 +384,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // ── CONTACT DISPLAY ─────────────────────────
                         const FeatherLayer(
                           index: 4,
                           child: Padding(
@@ -378,6 +423,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // ── THEMING ─────────────────────────────────
                         const FeatherLayer(
                           index: 6,
                           child: Padding(
@@ -412,10 +459,41 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ),
-                        if (_metroVInstalled == true) ...[
+                        // Accent colour row — tap to pick from the WP palette.
+                        FeatherLayer(
+                          index: 8,
+                          child: _FilterRow(
+                            label: 'accent colour',
+                            value: accentName,
+                            leadingSwatch: Color(selectedArgb),
+                            onTap: _pickAccentColor,
+                          ),
+                        ),
+                        // Use launcher accent — only when MetroV launcher
+                        // is installed.
+                        if (_metroVLauncherInstalled == true)
+                          FeatherLayer(
+                            index: 9,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0, vertical: 8.0),
+                              child: ValueListenableBuilder<bool>(
+                                valueListenable:
+                                widget.settings.useLauncherAccent,
+                                builder: (context, value, _) => WpToggleSwitch(
+                                  header: 'Use MetroV launcher accent',
+                                  value: value,
+                                  accentColor: AccentColor,
+                                  onChanged: (v) => widget
+                                      .settings.useLauncherAccent.value = v,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_metroVNavbarInstalled == true) ...[
                           const SizedBox(height: 24),
                           FeatherLayer(
-                            index: 8,
+                            index: 10,
                             child: InkWell(
                               onTap: _copyBarColorHex,
                               splashFactory: NoSplash.splashFactory,
@@ -456,11 +534,13 @@ class _FilterRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback? onTap;
+  final Color? leadingSwatch;
 
   const _FilterRow({
     required this.label,
     required this.value,
     this.onTap,
+    this.leadingSwatch,
   });
 
   @override
@@ -475,7 +555,7 @@ class _FilterRow extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
-              width: 96,
+              width: 116,
               child: Text(
                 label,
                 style: const TextStyle(
@@ -485,6 +565,14 @@ class _FilterRow extends StatelessWidget {
                 ),
               ),
             ),
+            if (leadingSwatch != null) ...[
+              Container(
+                width: 16,
+                height: 16,
+                color: leadingSwatch,
+              ),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Text(
                 value,
@@ -509,21 +597,24 @@ class _FilterRow extends StatelessWidget {
   }
 }
 
-class _ChoiceOption {
-  final String id;
+class _ChoiceOption<T> {
+  final T id;
   final String label;
   final String subtitle;
+  final Color? swatch;
+
   const _ChoiceOption({
     required this.id,
     required this.label,
     this.subtitle = '',
+    this.swatch,
   });
 }
 
-class _ChoiceDialog extends StatelessWidget {
+class _ChoiceDialog<T> extends StatelessWidget {
   final String title;
-  final List<_ChoiceOption> options;
-  final String currentId;
+  final List<_ChoiceOption<T>> options;
+  final T currentId;
 
   const _ChoiceDialog({
     required this.title,
@@ -562,7 +653,7 @@ class _ChoiceDialog extends StatelessWidget {
                 final opt = options[index];
                 final selected = opt.id == currentId;
                 return InkWell(
-                  onTap: () => Navigator.pop(context, opt.id),
+                  onTap: () => Navigator.pop<T>(context, opt.id),
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.white.withOpacity(0.06),
                   child: Padding(
@@ -578,6 +669,14 @@ class _ChoiceDialog extends StatelessWidget {
                           color: selected ? AccentColor : Colors.white38,
                         ),
                         const SizedBox(width: 12),
+                        if (opt.swatch != null) ...[
+                          Container(
+                            width: 20,
+                            height: 20,
+                            color: opt.swatch,
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,

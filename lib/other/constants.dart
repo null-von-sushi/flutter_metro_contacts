@@ -1,7 +1,33 @@
 import 'package:flutter/material.dart';
 
 // Accent Color used for the app if no actual preference can be found
-const Color accentColorFallback = Color(0xFFA20025);
+const int accentColorFallbackArgb = 0xFFA20025;
+const Color accentColorFallback = Color(accentColorFallbackArgb);
+
+/// The WP8.1 accent palette. Display name → ARGB int.
+/// Order here is the display order in the accent picker.
+const Map<String, int> wpAccentPalette = {
+  'lime':    0xFFA4C400,
+  'green':   0xFF60A917,
+  'emerald': 0xFF008A00,
+  'teal':    0xFF00ABA9,
+  'cyan':    0xFF1BA1E2,
+  'cobalt':  0xFF0050EF,
+  'indigo':  0xFF6A00FF,
+  'violet':  0xFFAA00FF,
+  'pink':    0xFFF472D0,
+  'magenta': 0xFFD80073,
+  'crimson': 0xFFA20025,
+  'red':     0xFFE51400,
+  'orange':  0xFFFA6800,
+  'amber':   0xFFF0A30A,
+  'yellow':  0xFFE3C800,
+  'brown':   0xFF825A2C,
+  'olive':   0xFF6D8764,
+  'steel':   0xFF647687,
+  'mauve':   0xFF76608A,
+  'taupe':   0xFF87794E,
+};
 
 // List of strings that represent the concept of self. Used for identifying
 // who to put as the ME tile.
