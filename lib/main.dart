@@ -58,7 +58,7 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 4,
+        incomingMaxIndex: 5,
       ).routeDuration(),
     );
     _contactsFuture = _contactRepository.fetchContacts();
@@ -74,7 +74,7 @@ class _PeoplePageState extends State<PeoplePage>
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 4, // Settings has layers 0-4 now
+        incomingMaxIndex: 5, // Settings has layers 0-4 now
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => SettingsPage(
           onPopStart: _exitController.reverse,
@@ -125,7 +125,7 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 4,
+        incomingMaxIndex: 5,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,

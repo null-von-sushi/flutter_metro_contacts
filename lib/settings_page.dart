@@ -1,7 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
+
+/// MethodChannel used to ask Android whether a given package is installed.
+/// Must match the channel name declared in MainActivity.kt.
+const _packageCheckChannel = MethodChannel(
+  'com.example.flutter_metro_contacts/package_check',
+);
+
+/// Package ID of MetroV Navbar. If installed, we surface a note telling
+/// the user to match its background color to ours.
+const _metroVPackage = 'com.tuzkituan.metrov.navbar';
+
+/// Background color of the bottom app bar and everything that should
+/// visually align with it.
+const _barBackgroundHex = '#1F1F1F';
 
 class SettingsPage extends StatefulWidget {
   final VoidCallback? onPopStart;
@@ -14,6 +29,44 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _prioritizeNicknames = false;
   bool _parseNotesForAccentColor = false;
+
+  /// null while the check is in flight, true/false once resolved.
+  /// The note is hidden while null so it doesn't flash in and out.
+  bool? _metroVInstalled;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMetroVInstalled();
+  }
+
+  Future<void> _checkMetroVInstalled() async {
+    try {
+      final installed = await _packageCheckChannel.invokeMethod<bool>(
+        'isPackageInstalled',
+        {'packageName': _metroVPackage},
+      );
+      if (mounted) setState(() => _metroVInstalled = installed ?? false);
+    } catch (_) {
+      if (mounted) setState(() => _metroVInstalled = false);
+    }
+  }
+
+  Future<void> _copyBarColorHex() async {
+    HapticFeedback.lightImpact();
+    await Clipboard.setData(const ClipboardData(text: _barBackgroundHex));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Color(0xFF1F1F1F),
+        content: Text(
+          'copied — paste into MetroV Navbar settings',
+          style: TextStyle(color: Colors.white),
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
 
   void _handleBack() {
     widget.onPopStart?.call();
@@ -32,13 +85,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _handleBack();
       },
       child: Scaffold(
-        // Transparent so PeoplePage shows through during the transition.
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // Opaque background fades in over the first 40% of the route
-            // animation (~300ms at default speed), so PeoplePage's exit
-            // rotation is visible underneath before black covers it.
             Positioned.fill(
               child: AnimatedBuilder(
                 animation: anim,
@@ -50,7 +99,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
             ),
-            // Content with per-element stagger.
             SafeArea(
               child: Column(
                 children: [
@@ -79,8 +127,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   Expanded(
                     child: ListView(
-                      padding:
-                      const EdgeInsets.symmetric(vertical: 16.0),
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
                         const FeatherLayer(
                           index: 1,
@@ -101,8 +148,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         FeatherLayer(
                           index: 2,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0),
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 16.0),
                             child: WpToggleSwitch(
                               header:
                               'Prioritize Nicknames instead of legal names',
@@ -133,8 +180,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         FeatherLayer(
                           index: 4,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0),
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 16.0),
                             child: WpToggleSwitch(
                               header: 'Parse Notes for Accent Color',
                               accentColor: AccentColor,
@@ -144,6 +191,33 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ),
+                        if (_metroVInstalled == true) ...[
+                          const SizedBox(height: 24),
+                          FeatherLayer(
+                            index: 5,
+                            child: InkWell(
+                              onTap: _copyBarColorHex,
+                              splashFactory: NoSplash.splashFactory,
+                              highlightColor:
+                              Colors.white.withOpacity(0.06),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 16.0, vertical: 8.0),
+                                child: Text(
+                                  'MetroV Navbar detected. To make its bar '
+                                      'match this app\'s, set its background '
+                                      'color to #1F1F1F (tap to copy).',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w300,
+                                    color: Colors.white38,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
