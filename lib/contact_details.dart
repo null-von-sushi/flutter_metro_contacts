@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:url_launcher/url_launcher.dart';
 import 'data/class_contact.dart';
+import 'data/contact_repository.dart';
 import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
@@ -29,12 +30,21 @@ class ContactDetailsPage extends StatefulWidget {
 }
 
 class _ContactDetailsPageState extends State<ContactDetailsPage> {
+  final _repository = ContactRepository();
+
   Uint8List? _fullPhoto;
+
+  /// The fully-aggregated contact, fetched by ID without any account
+  /// filter. If the list was filtered to one account, the `widget.contact`
+  /// we were given only has that account's data — this one has data from
+  /// every linked raw contact.
+  Contact? _fullContact;
 
   @override
   void initState() {
     super.initState();
     _loadFullPhoto();
+    _loadFullContact();
   }
 
   Future<void> _loadFullPhoto() async {
@@ -47,6 +57,35 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       if (bytes != null && bytes.isNotEmpty && mounted) {
         setState(() => _fullPhoto = bytes);
       }
+    } catch (_) {}
+  }
+
+  /// Re-fetches the contact by ID with no account/group filter, so that
+  /// phone numbers, emails, addresses, notes, etc. from every linked
+  /// account are shown — even when the list was filtered to a single
+  /// account.
+  Future<void> _loadFullContact() async {
+    try {
+      final full = await FlutterContacts.get(
+        widget.contact.id,
+        properties: {
+          ContactProperty.name,
+          ContactProperty.photoThumbnail,
+          ContactProperty.phone,
+          ContactProperty.email,
+          ContactProperty.address,
+          ContactProperty.note,
+          ContactProperty.event,
+          ContactProperty.identifiers,
+          ContactProperty.website,
+          ContactProperty.socialMedia,
+        },
+      );
+      if (full == null) return;
+      if (!mounted) return;
+      setState(() {
+        _fullContact = _repository.mapSingleContact(full);
+      });
     } catch (_) {}
   }
 
@@ -279,10 +318,9 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.contact;
-    // The "Parse Notes for Accent Color" toggle gates whether we honour
-    // the per-contact color derived from notes. When off, we always fall
-    // back to the global accent.
+    // Prefer the fully-aggregated contact when loaded; fall back to the
+    // (possibly filtered) one we were handed from the list until then.
+    final c = _fullContact ?? widget.contact;
     final accent = (widget.settings.parseNotesForAccentColor.value
         ? c.accentColor
         : null) ??
@@ -589,6 +627,7 @@ class _ProfilePhoto extends StatelessWidget {
   }
 }
 
+/// A section with a header (verb + type) and a single value underneath.
 class _InfoSection extends StatelessWidget {
   final String header;
   final String value;

@@ -21,9 +21,7 @@ class ContactRepository {
   ///
   /// [accountId] is the composite key produced by [accountKey].
   /// [groupId] is a `Group.id` from `FlutterContacts.groups.getAll()`.
-  /// Both are nullable; null means "no restriction". If a provided
-  /// account key no longer matches any installed account, the filter is
-  /// dropped and the full list is returned.
+  /// Both are nullable; null means "no restriction".
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts({
     String? accountId,
     String? groupId,
@@ -40,7 +38,6 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
-    // Resolve the account, if a filter was requested.
     Account? account;
     if (accountId != null) {
       try {
@@ -55,7 +52,6 @@ class ContactRepository {
       } catch (_) {}
     }
 
-    // Build the group filter if both account and group are resolved.
     ContactFilter? filter;
     if (account != null && groupId != null) {
       filter = ContactFilter.group(groupId);
@@ -83,62 +79,8 @@ class ContactRepository {
     String? meId;
 
     for (final c in fetchedContacts) {
-      final name = c.displayName;
-      final nickname = c.name?.nickname;
-      final isMe =
-          nickname != null && meStrings.contains(nickname.trim().toLowerCase());
-
-      final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
-          .map((rc) => rc.account?.type)
-          .whereType<String>()
-          .toList();
-
-      final signalId = _findMessengerId(
-        c,
-        MessagingAccountTypes.signalMessengerLabels,
-      );
-      final telegramId = _findMessengerId(
-        c,
-        MessagingAccountTypes.telegramMessengerLabels,
-      );
-      final weChatId = _findMessengerId(
-        c,
-        MessagingAccountTypes.weChatMessengerLabels,
-      );
-
-      final hasSignal = signalId != null ||
-          accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
-      final hasTelegram = telegramId != null ||
-          accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
-      final hasWeChat = weChatId != null ||
-          accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
-
-      final notes = _mapNotes(c);
-      final accentColor = _extractFavoriteColor(notes);
-
-      final contact = Contact(
-        id: c.id ?? '',
-        name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
-        nickname: nickname,
-        status: ' ',
-        photo: c.photo?.thumbnail,
-        photoFull: null,
-        isMe: isMe,
-        phones: _mapPhones(c),
-        emails: _mapEmails(c),
-        addresses: _mapAddresses(c),
-        notes: notes,
-        accentColor: accentColor,
-        birthday: _extractBirthday(c),
-        hasTelegram: hasTelegram,
-        hasSignal: hasSignal,
-        hasWeChat: hasWeChat,
-        signalId: signalId,
-        telegramId: telegramId,
-        weChatId: weChatId,
-      );
-
-      if (isMe) {
+      final contact = mapSingleContact(c);
+      if (contact.isMe) {
         if (meContact == null) {
           meContact = contact;
           meId = c.id;
@@ -162,6 +104,72 @@ class ContactRepository {
     }
 
     return (contacts: otherContacts, meContact: meContact);
+  }
+
+  /// Maps a single plugin `Contact` to this app's `Contact` model.
+  ///
+  /// The `photoFull` field is left as null — callers that need the
+  /// full-resolution image (the Me tile, the details page) fetch it
+  /// separately via `FlutterContacts.get(id, photoFullRes)`.
+  ///
+  /// This is public so `ContactDetailsPage` can re-fetch the fully-
+  /// aggregated contact by ID (with no account filter) and map it the
+  /// same way the list does.
+  Contact mapSingleContact(dynamic c) {
+    final name = c.displayName;
+    final nickname = c.name?.nickname;
+    final isMe =
+        nickname != null && meStrings.contains(nickname.trim().toLowerCase());
+
+    final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
+        .map((rc) => rc.account?.type)
+        .whereType<String>()
+        .toList();
+
+    final signalId = _findMessengerId(
+      c,
+      MessagingAccountTypes.signalMessengerLabels,
+    );
+    final telegramId = _findMessengerId(
+      c,
+      MessagingAccountTypes.telegramMessengerLabels,
+    );
+    final weChatId = _findMessengerId(
+      c,
+      MessagingAccountTypes.weChatMessengerLabels,
+    );
+
+    final hasSignal = signalId != null ||
+        accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
+    final hasTelegram = telegramId != null ||
+        accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
+    final hasWeChat = weChatId != null ||
+        accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
+
+    final notes = _mapNotes(c);
+    final accentColor = _extractFavoriteColor(notes);
+
+    return Contact(
+      id: c.id ?? '',
+      name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
+      nickname: nickname,
+      status: ' ',
+      photo: c.photo?.thumbnail,
+      photoFull: null,
+      isMe: isMe,
+      phones: _mapPhones(c),
+      emails: _mapEmails(c),
+      addresses: _mapAddresses(c),
+      notes: notes,
+      accentColor: accentColor,
+      birthday: _extractBirthday(c),
+      hasTelegram: hasTelegram,
+      hasSignal: hasSignal,
+      hasWeChat: hasWeChat,
+      signalId: signalId,
+      telegramId: telegramId,
+      weChatId: weChatId,
+    );
   }
 
   // ── Messenger ID detection ──────────────────────────────────────────
