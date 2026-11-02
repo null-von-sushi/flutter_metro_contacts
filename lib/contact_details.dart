@@ -102,6 +102,26 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(Uri(scheme: 'sms', path: cleaned), 'No messaging app found');
   }
 
+  Future<void> _copyAndOpenWeChat(String number) async {
+    HapticFeedback.lightImpact();
+    await Clipboard.setData(ClipboardData(text: number));
+    // Open WeChat to its main screen. If not installed, do nothing extra.
+    try {
+      await launchUrl(Uri.parse('weixin://'), mode: LaunchMode.externalApplication);
+    } catch (_) {}
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1F1F1F),
+        content: const Text(
+          'copied — paste in WeChat search',
+          style: TextStyle(color: Colors.white),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   void _sendEmail(String address) {
     _launchUri(Uri(scheme: 'mailto', path: address), 'No email app found');
   }
@@ -301,14 +321,16 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     // wechat, nothing we can do because it's cancer
+    // for now copy-on-tap because there's no
+    // reliable deep link for opening a chat with a specific number...
     if (c.hasWeChat && c.phones.isNotEmpty) {
       final primary = c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Contact via WeChat',
+          header: 'Copy WeChat number',
           value: primary,
-          // No onTap: WeChat has no deep link for chat-by-phone.
+          onTap: () => _copyAndOpenWeChat(primary),
         ),
       ));
     }

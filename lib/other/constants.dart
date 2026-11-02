@@ -19,6 +19,7 @@ class MessagingAccountTypes {
 
   static const List<String> signalMessengerLabels = [
     'signal',
+    'https://signal.me/#p/'
   ];
 
   /// Known identifiers and account types for Telegram and its forks
@@ -37,7 +38,8 @@ class MessagingAccountTypes {
   ];
 
   static const List<String> telegramMessengerLabels = [
-    'telegram'
+    'telegram',
+    "tg",
   ];
 
   static const List<String> weChatMessenger = [
@@ -47,5 +49,6 @@ class MessagingAccountTypes {
   static const List<String> weChatMessengerLabels = [
     'weixin',
     'wechat',
+    '微信',
   ];
 }
