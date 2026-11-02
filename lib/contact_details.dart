@@ -102,22 +102,34 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(Uri(scheme: 'sms', path: cleaned), 'No messaging app found');
   }
 
-  Future<void> _copyAndOpenWeChat(String number) async {
+  Future<void> _copyAndOpenWeChat(String identifier) async {
     HapticFeedback.lightImpact();
-    await Clipboard.setData(ClipboardData(text: number));
-    // Open WeChat to its main screen. If not installed, do nothing extra.
+    await Clipboard.setData(ClipboardData(text: identifier));
+
+    // Try to open WeChat
+    bool opened = false;
     try {
-      await launchUrl(Uri.parse('weixin://'), mode: LaunchMode.externalApplication);
+      opened = await launchUrl(
+        Uri.parse('weixin://'),
+        mode: LaunchMode.externalApplication,
+      );
     } catch (_) {}
+
     if (!mounted) return;
+
+    // Determine the message based on whether WeChat opened successfully
+    final String message = opened
+        ? 'Copied — switching to WeChat'
+        : 'Copied';
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF1F1F1F),
-        content: const Text(
-          'copied — paste in WeChat search',
-          style: TextStyle(color: Colors.white),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
         ),
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 4), // Slightly longer to give time to read
       ),
     );
   }
@@ -146,28 +158,40 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _showError('No maps app found');
   }
 
-  void _openTelegram(String number) {
-    final target = _internationalise(number);
-    if (target.isEmpty) {
-      _showError('No Telegram number');
-      return;
-    }
-    _launchUri(
-      Uri.parse('tg://resolve?phone=$target'),
-      'Telegram not installed',
-    );
+  /// Returns true if [identifier] plausibly looks like a phone number
+  /// (contains enough digits to be a real number rather than a username).
+  bool _looksLikePhone(String identifier) {
+    final digits = identifier.replaceAll(RegExp(r'[^\d]'), '');
+    return digits.length >= 6;
   }
 
-  void _openSignal(String number) {
-    final target = _internationalise(number);
-    if (target.isEmpty) {
-      _showError('No Signal number');
+  void _openSignal(String identifier) {
+    if (identifier.isEmpty) {
+      _showError('No Signal identifier');
       return;
     }
+    final target = _looksLikePhone(identifier)
+        ? _internationalise(identifier)
+        : identifier;
     _launchUri(
       Uri.parse('https://signal.me/#p/$target'),
       'Signal not installed',
     );
+  }
+
+  void _openTelegram(String identifier) {
+    if (identifier.isEmpty) {
+      _showError('No Telegram identifier');
+      return;
+    }
+    final Uri uri;
+    if (_looksLikePhone(identifier)) {
+      final target = _internationalise(identifier);
+      uri = Uri.parse('tg://resolve?phone=$target');
+    } else {
+      uri = Uri.parse('tg://resolve?domain=$identifier');
+    }
+    _launchUri(uri, 'Telegram not installed');
   }
 
   // ── Existing dialogs ──────────────────────────────────────────────
@@ -294,43 +318,42 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Signal: one section per contact, using the primary number.
-    if (c.hasSignal && c.phones.isNotEmpty) {
-      final primary = c.phones.first.number;
+    // Signal
+    if (c.hasSignal && (c.signalId != null || c.phones.isNotEmpty)) {
+      final id = c.signalId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Contact via Signal',
-          value: primary,
-          onTap: () => _openSignal(primary),
+          value: id,
+          onTap: () => _openSignal(id),
         ),
       ));
     }
 
-    // Telegram: same pattern.
-    if (c.hasTelegram && c.phones.isNotEmpty) {
-      final primary = c.phones.first.number;
+    // Telegram
+    if (c.hasTelegram && (c.telegramId != null || c.phones.isNotEmpty)) {
+      final id = c.telegramId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Contact via Telegram',
-          value: primary,
-          onTap: () => _openTelegram(primary),
+          value: id,
+          onTap: () => _openTelegram(id),
         ),
       ));
     }
 
-    // wechat, nothing we can do because it's cancer
-    // for now copy-on-tap because there's no
-    // reliable deep link for opening a chat with a specific number...
-    if (c.hasWeChat && c.phones.isNotEmpty) {
-      final primary = c.phones.first.number;
+    // WeChat (copy-only, no reliable deep link)
+    // WeChat (copy + open — no reliable deep link, so we do best-effort)
+    if (c.hasWeChat && (c.weChatId != null || c.phones.isNotEmpty)) {
+      final id = c.weChatId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: 'Copy WeChat number',
-          value: primary,
-          onTap: () => _copyAndOpenWeChat(primary),
+          header: 'Copy WeChat ID',
+          value: id,
+          onTap: () => _copyAndOpenWeChat(id),
         ),
       ));
     }

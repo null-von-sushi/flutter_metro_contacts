@@ -19,7 +19,8 @@ class MessagingAccountTypes {
 
   static const List<String> signalMessengerLabels = [
     'signal',
-    'https://signal.me/#p/'
+    'https://signal.me/#p/',
+    'sgnl://',
   ];
 
   /// Known identifiers and account types for Telegram and its forks
@@ -50,5 +51,10 @@ class MessagingAccountTypes {
     'weixin',
     'wechat',
     '微信',
+  ];
+
+  static const List<String> favoriteColorString = [
+    '最喜歡.{1,3}色',
+    'favou*rite\scolou*r:\s*.{1,10}',
   ];
 }

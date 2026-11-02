@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-/// A single phone number with its display header pre-formatted.
 class ContactPhone {
   final String number;
   final String header;
@@ -34,17 +33,16 @@ class Contact {
   final List<String> notes;
   final DateTime? birthday;
 
-  /// True if this contact is on Telegram, either via a raw-contact entry
-  /// owned by a known Telegram package or via a phone number labelled
-  /// with one of the Telegram labels ("telegram").
   final bool hasTelegram;
-
-  /// Same logic for Signal.
   final bool hasSignal;
-
-  /// Same logic for WeChat. Note that WeChat has no reliable deep link
-  /// for opening a specific chat, so the UI section is display-only.
   final bool hasWeChat;
+
+  // Optional identifiers extracted from a phone label or URL.
+  // null when the contact has the messenger (via account) but no
+  // specific handle was found.
+  final String? signalId;
+  final String? telegramId;
+  final String? weChatId;
 
   const Contact({
     required this.id,
@@ -62,6 +60,9 @@ class Contact {
     this.hasTelegram = false,
     this.hasSignal = false,
     this.hasWeChat = false,
+    this.signalId,
+    this.telegramId,
+    this.weChatId,
   });
 
   Contact copyWith({
@@ -80,6 +81,9 @@ class Contact {
     bool? hasTelegram,
     bool? hasSignal,
     bool? hasWeChat,
+    String? signalId,
+    String? telegramId,
+    String? weChatId,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -97,6 +101,9 @@ class Contact {
       hasTelegram: hasTelegram ?? this.hasTelegram,
       hasSignal: hasSignal ?? this.hasSignal,
       hasWeChat: hasWeChat ?? this.hasWeChat,
+      signalId: signalId ?? this.signalId,
+      telegramId: telegramId ?? this.telegramId,
+      weChatId: weChatId ?? this.weChatId,
     );
   }
 
@@ -124,16 +131,18 @@ class Contact {
   }
 
   int get detailsMaxIndex {
-    int count = 2; // header + photo
-    count += phones.length * 2; // "Call X" + "Text X" per number
-    if (hasSignal && phones.isNotEmpty) count += 1;
-    if (hasTelegram && phones.isNotEmpty) count += 1;
-    if (hasWeChat && phones.isNotEmpty) count += 1;
+    int count = 2;
+    count += phones.length * 2;
+    // Signal section shows if hasSignal AND we have either a specific
+    // ID or at least one phone to fall back to.
+    if (hasSignal && (signalId != null || phones.isNotEmpty)) count += 1;
+    if (hasTelegram && (telegramId != null || phones.isNotEmpty)) count += 1;
+    if (hasWeChat && (weChatId != null || phones.isNotEmpty)) count += 1;
     count += emails.length;
     count += addresses.length;
     if (birthday != null) count += 1;
     if (notes.isNotEmpty) count += 1;
-    count += 1; // bottom application bar
+    count += 1;
     return count - 1;
   }
 }

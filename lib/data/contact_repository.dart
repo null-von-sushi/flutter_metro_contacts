@@ -29,6 +29,8 @@ class ContactRepository {
         ContactProperty.note,
         ContactProperty.event,
         ContactProperty.identifiers,
+        ContactProperty.website,
+        ContactProperty.socialMedia,
       },
     );
 
@@ -48,18 +50,25 @@ class ContactRepository {
           .whereType<String>()
           .toList();
 
-      final hasTelegram = accountTypes.any(
-        MessagingAccountTypes.telegramMessenger.contains,
-      ) ||
-          _hasMessengerLabel(c, MessagingAccountTypes.telegramMessengerLabels);
-      final hasSignal = accountTypes.any(
-        MessagingAccountTypes.signalMessenger.contains,
-      ) ||
-          _hasMessengerLabel(c, MessagingAccountTypes.signalMessengerLabels);
-      final hasWeChat = accountTypes.any(
-        MessagingAccountTypes.weChatMessenger.contains,
-      ) ||
-          _hasMessengerLabel(c, MessagingAccountTypes.weChatMessengerLabels);
+      final signalId = _findMessengerId(
+        c,
+        MessagingAccountTypes.signalMessengerLabels,
+      );
+      final telegramId = _findMessengerId(
+        c,
+        MessagingAccountTypes.telegramMessengerLabels,
+      );
+      final weChatId = _findMessengerId(
+        c,
+        MessagingAccountTypes.weChatMessengerLabels,
+      );
+
+      final hasSignal = signalId != null ||
+          accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
+      final hasTelegram = telegramId != null ||
+          accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
+      final hasWeChat = weChatId != null ||
+          accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
 
       final contact = Contact(
         id: c.id ?? '',
@@ -77,6 +86,9 @@ class ContactRepository {
         hasTelegram: hasTelegram,
         hasSignal: hasSignal,
         hasWeChat: hasWeChat,
+        signalId: signalId,
+        telegramId: telegramId,
+        weChatId: weChatId,
       );
 
       if (isMe) {
@@ -105,23 +117,99 @@ class ContactRepository {
     return (contacts: otherContacts, meContact: meContact);
   }
 
-  /// Returns true if any of the contact's phone numbers carries a label
-  /// matching one of [messengerLabels] (case-insensitive).
-  ///
-  /// Uses the resolved display header — the same string the details page
-  /// shows — so a number the user labelled "Telegram" or "telegram" both
-  /// match, and a number labelled with the standard `mobile`/`home`
-  /// enums never does.
-  bool _hasMessengerLabel(dynamic c, List<String> messengerLabels) {
+  /// Finds the best available identifier for a messenger, checking URLs
+  /// (Website + IMPP) first, then phone labels. Returns null if none found.
+  String? _findMessengerId(dynamic c, List<String> labels) {
+    return _findIdFromUrls(c, labels) ?? _findIdFromPhoneLabels(c, labels);
+  }
+
+  /// Checks every URL on the contact (from Website.url and SocialMedia.userName)
+  /// against [labels] as case-insensitive prefixes. Returns the extracted
+  /// handle from the first match, or null if none match.
+  String? _findIdFromUrls(dynamic c, List<String> labels) {
+    final urls = <String>[];
+    try {
+      for (final w in (c.websites as List? ?? [])) {
+        final u = (w.url as String?) ?? '';
+        if (u.isNotEmpty) urls.add(u);
+      }
+    } catch (_) {}
+    try {
+      for (final s in (c.socialMedias as List? ?? [])) {
+        final u = (s.userName as String?) ?? '';
+        if (u.isNotEmpty) urls.add(u);
+      }
+    } catch (_) {}
+
+    for (final url in urls) {
+      final lower = url.toLowerCase();
+      for (final label in labels) {
+        if (lower.startsWith(label.toLowerCase())) {
+          return _extractHandleFromUrl(url, label);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Checks each phone's resolved header against [labels]. Returns the
+  /// phone number of the first matching phone, or null.
+  String? _findIdFromPhoneLabels(dynamic c, List<String> labels) {
     try {
       for (final p in (c.phones as List)) {
         final header = _headerFor(p, fallback: '').toLowerCase();
-        if (header.isNotEmpty && messengerLabels.contains(header)) {
-          return true;
+        if (header.isNotEmpty && labels.contains(header)) {
+          final number = (p.number as String?) ?? '';
+          if (number.isNotEmpty) return number;
         }
       }
     } catch (_) {}
-    return false;
+    return null;
+  }
+
+  /// Extracts the human-meaningful handle from a URL that was already
+  /// confirmed to start with [prefix]. Order of preference:
+  ///   query param (?username=, ?user=, ?id=, ?phone=)
+  ///   bare query (?johndoe)
+  ///   fragment last segment (#p/+441234567890)
+  ///   path last segment (/user/johndoe)
+  ///   host (fallback)
+  ///   full URL (last resort)
+  String _extractHandleFromUrl(String url, String prefix) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+
+    // 1. Named query parameter.
+    if (uri.queryParameters.isNotEmpty) {
+      final known = uri.queryParameters['username'] ??
+          uri.queryParameters['user'] ??
+          uri.queryParameters['id'] ??
+          uri.queryParameters['phone'];
+      if (known != null && known.isNotEmpty) return known;
+    }
+
+    // 2. Bare query with no '=' (e.g. weixin://dl/chat?johndoe).
+    if (uri.query.isNotEmpty && !uri.query.contains('=')) {
+      return uri.query;
+    }
+
+    // 3. Fragment last segment (e.g. signal.me/#p/+441234567890).
+    if (uri.fragment.isNotEmpty) {
+      final frag = uri.fragment;
+      return frag.contains('/') ? frag.split('/').last : frag;
+    }
+
+    // 4. Path last segment.
+    if (uri.pathSegments.isNotEmpty) {
+      final last = uri.pathSegments.last;
+      if (last.isNotEmpty) return last;
+    }
+
+    // 5. Host.
+    if (uri.host.isNotEmpty) return uri.host;
+
+    // 6. Give up — return the whole URL so the user can see what we got.
+    return url;
   }
 
   // ── Phones / Emails / Addresses / Notes ─────────────────────────────
