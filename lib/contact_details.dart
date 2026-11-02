@@ -249,7 +249,9 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           settings: widget.settings,
           onSaved: () {
             if (mounted) {
-              setState(() => _fullContact = null);
+              setState(() {
+                _fullContact = null;
+              });
               _loadFullContact();
             }
           },

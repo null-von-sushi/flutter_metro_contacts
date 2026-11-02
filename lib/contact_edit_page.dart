@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
+import 'other/constants.dart';
 import 'other/settings.dart';
 import 'other/wp_text.dart';
 import 'transitions/wp_phone_transition.dart';
@@ -16,9 +18,6 @@ class ContactEditPage extends StatefulWidget {
   final Contact? contact;
   final Settings settings;
   final VoidCallback? onPopStart;
-
-  /// Fires after a successful save. The caller is expected to refresh
-  /// whatever list/detail view it pushed us from.
   final VoidCallback? onSaved;
 
   const ContactEditPage({
@@ -44,18 +43,28 @@ class _ContactEditPageState extends State<ContactEditPage> {
   final _firstCtrl = TextEditingController();
   final _middleCtrl = TextEditingController();
   final _lastCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
 
   List<fc.Phone> _phones = [];
   List<fc.Email> _emails = [];
   List<fc.Website> _websites = [];
-  List<fc.Note> _notes = [];
+
+  /// Only writable accounts. Read-only accounts (messenger sync accounts,
+  /// DAVx5 address books, etc.) are filtered out at load time — see
+  /// [_isReadOnlyAccount].
+  List<fc.Account> _accounts = [];
+  String? _selectedAccountKey;
 
   bool get _isEdit => widget.contact != null;
 
   @override
   void initState() {
     super.initState();
-    if (_isEdit) _load();
+    if (_isEdit) {
+      _load();
+    } else {
+      _loadAccounts();
+    }
   }
 
   @override
@@ -65,7 +74,91 @@ class _ContactEditPageState extends State<ContactEditPage> {
     _firstCtrl.dispose();
     _middleCtrl.dispose();
     _lastCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
+  }
+
+  static String _accountKeyOf(fc.Account a) => '${a.type}|${a.name}';
+
+  /// Best-effort heuristic for accounts the OS rejects writes to.
+  ///
+  /// Android doesn't expose writability via `ContactContract.Account`, so
+  /// we fall back to skipping types that are known in practice to be
+  /// sync-only: messenger app accounts and DAVx5 address books. If a
+  /// "writable" account turns out not to be, `FlutterContacts.create`
+  /// throws `read_only_contact` and we surface that in the snackbar.
+  bool _isReadOnlyAccount(fc.Account a) {
+    final type = a.type;
+    if (type.isEmpty) return false;
+    if (MessagingAccountTypes.signalMessenger.contains(type)) return true;
+    if (MessagingAccountTypes.telegramMessenger.contains(type)) return true;
+    if (MessagingAccountTypes.weChatMessenger.contains(type)) return true;
+    if (type.startsWith('at.bitfire.davdroid')) return true;
+    if (type.startsWith('com.whatsapp')) return true;
+    if (type == 'com.google.android.ims') return true; // RCS
+    return false;
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final raw = await fc.FlutterContacts.accounts.getAll();
+      final writable = raw
+          .whereType<fc.Account>()
+          .where((a) => !_isReadOnlyAccount(a))
+          .toList();
+
+      fc.Account? defaultAccount;
+      try {
+        defaultAccount = await fc.FlutterContacts.accounts.getDefault();
+      } catch (e) {
+        debugPrint('[edit] getDefault failed: $e');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _accounts = writable;
+        _selectedAccountKey = _pickDefaultAccountKey(
+          writable,
+          defaultAccount,
+        );
+      });
+      debugPrint(
+        '[edit] loaded ${writable.length} writable account(s): '
+            '${writable.map((a) => _accountKeyOf(a)).toList()}, '
+            'selected=$_selectedAccountKey',
+      );
+    } catch (e, s) {
+      debugPrint('[edit] _loadAccounts failed: $e\n$s');
+    }
+  }
+
+  /// Chooses the default account for the dropdown, in this order:
+  ///   1. The account currently filtered in the list, if it's writable.
+  ///   2. The system default account, if it's writable.
+  ///   3. The first writable account.
+  String? _pickDefaultAccountKey(
+      List<fc.Account> accounts,
+      fc.Account? systemDefault,
+      ) {
+    if (accounts.isEmpty) return null;
+
+    final filter = widget.settings.accountFilter.value;
+    if (filter != null) {
+      for (final a in accounts) {
+        if (_accountKeyOf(a) == filter) {
+          return filter;
+        }
+      }
+    }
+
+    if (systemDefault != null) {
+      final key = _accountKeyOf(systemDefault);
+      if (accounts.any((a) => _accountKeyOf(a) == key)) {
+        return key;
+      }
+    }
+
+    return _accountKeyOf(accounts.first);
   }
 
   Future<void> _load() async {
@@ -101,13 +194,14 @@ class _ContactEditPageState extends State<ContactEditPage> {
         _firstCtrl.text = raw.name?.first ?? '';
         _middleCtrl.text = raw.name?.middle ?? '';
         _lastCtrl.text = raw.name?.last ?? '';
+        _noteCtrl.text = raw.notes.map((n) => n.note).join('\n\n');
         _phones = List.of(raw.phones);
         _emails = List.of(raw.emails);
         _websites = List.of(raw.websites);
-        _notes = List.of(raw.notes);
         _loading = false;
       });
-    } catch (e) {
+    } catch (e, s) {
+      debugPrint('[edit] _load failed: $e\n$s');
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -124,6 +218,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
     final middle = _middleCtrl.text.trim();
     final nickname = _nicknameCtrl.text.trim();
     final display = _displayNameCtrl.text.trim();
+    final noteText = _noteCtrl.text.trim();
 
     if (first.isEmpty && last.isEmpty && display.isEmpty) {
       _showSnack('Enter a display name or a first/last name');
@@ -140,34 +235,86 @@ class _ContactEditPageState extends State<ContactEditPage> {
         nickname: nickname.isEmpty ? null : nickname,
       );
 
+      final notes =
+      noteText.isEmpty ? <fc.Note>[] : <fc.Note>[fc.Note(note: noteText)];
+
       if (_isEdit) {
         final updated = _rawContact!.copyWith(
           name: name,
           phones: _phones,
           emails: _emails,
           websites: _websites,
-          notes: _notes,
+          notes: notes,
         );
+        debugPrint('[edit] updating contact ${widget.contact!.id}');
         await fc.FlutterContacts.update(updated);
+        debugPrint('[edit] update ok');
       } else {
+        fc.Account? accountToUse;
+        if (_selectedAccountKey != null) {
+          for (final a in _accounts) {
+            if (_accountKeyOf(a) == _selectedAccountKey) {
+              accountToUse = a;
+              break;
+            }
+          }
+        }
         final newContact = fc.Contact(
           name: name,
           phones: _phones,
           emails: _emails,
           websites: _websites,
-          notes: _notes,
+          notes: notes,
         );
-        await fc.FlutterContacts.create(newContact);
+        debugPrint(
+          '[edit] creating contact '
+              'name(first=${name.first},last=${name.last},nick=${name.nickname}) '
+              'account=${accountToUse == null ? "default" : _accountKeyOf(accountToUse)} '
+              'phones=${_phones.length} emails=${_emails.length} '
+              'websites=${_websites.length} notes=${notes.length}',
+        );
+        final newId = await fc.FlutterContacts.create(
+          newContact,
+          account: accountToUse,
+        );
+        debugPrint('[edit] create ok, id=$newId');
       }
 
       if (!mounted) return;
-      widget.onSaved?.call();
+
+      // The write already succeeded. If the caller's onSaved callback
+      // throws, we still want to pop and let the user see their new
+      // contact — the alternative is telling them "save failed" when
+      // it didn't.
+      try {
+        widget.onSaved?.call();
+      } catch (e, s) {
+        debugPrint(
+          '[edit] onSaved callback threw (save still succeeded): $e\n$s',
+        );
+      }
+
       widget.onPopStart?.call();
       Navigator.of(context).pop();
-    } catch (e) {
+    } on PlatformException catch (e, s) {
+      debugPrint('[edit] save failed (PlatformException): '
+          'code=${e.code} message=${e.message}\n$s');
       if (!mounted) return;
       setState(() => _saving = false);
-      _showSnack('Save failed: $e');
+      if (e.code == 'read_only_contact') {
+        _showSnack(
+          'This account is read-only. Pick a different one, or open '
+              'the system Contacts app to save there.',
+          seconds: 6,
+        );
+      } else {
+        _showSnack('Save failed: ${e.code} — ${e.message}', seconds: 6);
+      }
+    } catch (e, s) {
+      debugPrint('[edit] save failed: $e\n$s');
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _showSnack('Save failed: $e', seconds: 6);
     }
   }
 
@@ -176,14 +323,14 @@ class _ContactEditPageState extends State<ContactEditPage> {
     Navigator.of(context).pop();
   }
 
-  void _showSnack(String message) {
+  void _showSnack(String message, {int seconds = 3}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF1F1F1F),
         content: Text(message,
             style: const TextStyle(color: Colors.white)),
-        duration: const Duration(seconds: 3),
+        duration: Duration(seconds: seconds),
       ),
     );
   }
@@ -217,21 +364,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
     );
     if (url != null && url.isNotEmpty) {
       setState(() => _websites.add(fc.Website(url: url)));
-    }
-  }
-
-  Future<void> _addNote() async {
-    final text = await showDialog<String>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => const _AddTextDialog(
-        title: 'Add note',
-        hint: '',
-        multiline: true,
-      ),
-    );
-    if (text != null && text.isNotEmpty) {
-      setState(() => _notes.add(fc.Note(note: text)));
     }
   }
 
@@ -283,7 +415,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                       child: Text(
                         _isEdit ? 'EDIT CONTACT' : 'NEW CONTACT',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 1.2,
@@ -430,28 +562,20 @@ class _ContactEditPageState extends State<ContactEditPage> {
       accentColor: accent,
     ));
 
-    for (var i = 0; i < _notes.length; i++) {
-      final n = _notes[i];
-      sections.add(_InfoSection(
-        header: 'note',
-        value: n.note,
-        accentColor: accent,
-        onTap: () => _confirmRemove(
-          label: 'this note',
-          onConfirm: () => setState(() => _notes.removeAt(i)),
-        ),
-      ));
+    sections.add(_buildTextField('Note', _noteCtrl, multiline: true));
+
+    if (!_isEdit && _accounts.isNotEmpty) {
+      sections.add(_buildAccountPicker());
     }
-    sections.add(_AddButton(
-      label: 'note',
-      onTap: _addNote,
-      accentColor: accent,
-    ));
 
     return sections;
   }
 
-  Widget _buildTextField(String label, TextEditingController ctrl) {
+  Widget _buildTextField(
+      String label,
+      TextEditingController ctrl, {
+        bool multiline = false,
+      }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
@@ -469,6 +593,8 @@ class _ContactEditPageState extends State<ContactEditPage> {
           const SizedBox(height: 4),
           TextField(
             controller: ctrl,
+            maxLines: multiline ? null : 1,
+            minLines: multiline ? 3 : 1,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w300,
@@ -494,6 +620,63 @@ class _ContactEditPageState extends State<ContactEditPage> {
                 borderRadius: BorderRadius.zero,
                 borderSide: BorderSide(color: Colors.white24),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountPicker() {
+    final hasValue = _accounts.any(
+          (a) => _accountKeyOf(a) == _selectedAccountKey,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            wpLowercase('Save to account'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              color: Colors.white54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: hasValue ? _selectedAccountKey : null,
+              underline: const SizedBox.shrink(),
+              dropdownColor: const Color(0xFF1F1F1F),
+              icon: const Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white54,
+              ),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+              ),
+              items: [
+                for (final a in _accounts)
+                  DropdownMenuItem<String>(
+                    value: _accountKeyOf(a),
+                    child: Text(
+                      '${a.name} (${a.type})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _selectedAccountKey = v),
             ),
           ),
         ],

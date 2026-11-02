@@ -209,7 +209,9 @@ class _PeoplePageState extends State<PeoplePage>
           onPopStart: _exitController.reverse,
           onSaved: () {
             if (mounted) {
-              setState(() => _allPivotFuture = _fetchFiltered());
+              setState(() {
+                _allPivotFuture = _fetchFiltered();
+              });
             }
           },
         ),
