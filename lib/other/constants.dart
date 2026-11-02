@@ -41,6 +41,7 @@ class MessagingAccountTypes {
   static const List<String> telegramMessengerLabels = [
     'telegram',
     "tg",
+    "https://t.me/"
   ];
 
   static const List<String> weChatMessenger = [
