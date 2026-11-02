@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'data/contact_repository.dart';
+import 'data/group_query.dart';
 import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
@@ -77,12 +78,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (groupId != null) {
       try {
-        final groups = await FlutterContacts.groups.getAll();
-        for (final raw in groups) {
-          final g = raw as Group?;
-          if (g?.id == groupId) {
-            groupName =
-            (g?.name?.isNotEmpty ?? false) ? g!.name! : groupId;
+        final groups = await GroupQuery.fetchAll();
+        for (final g in groups) {
+          if (g.id == groupId) {
+            groupName = g.title;
             break;
           }
         }
@@ -180,7 +179,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
 
     if (groups.isEmpty) {
-      _showSnack('No groups found');
+      _showSnack('No groups found on this device');
       return;
     }
 
@@ -192,15 +191,12 @@ class _SettingsPageState extends State<SettingsPage> {
         options: [
           const _ChoiceOption(
               id: '__all__', label: 'all groups in account', subtitle: ''),
-          for (final raw in groups)
-            if (raw != null)
-              _ChoiceOption(
-                id: raw.id ?? '',
-                label: (raw.name?.isNotEmpty ?? false)
-                    ? raw.name!
-                    : 'unnamed group',
-                subtitle: '',
-              ),
+          for (final g in groups)
+            _ChoiceOption(
+              id: g.id,
+              label: g.title,
+              subtitle: '',
+            ),
         ],
         currentId: widget.settings.groupFilter.value ?? '__all__',
       ),
@@ -221,34 +217,19 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// Loads groups. Tries to scope by account first; if that would exclude
-  /// everything (which happens on devices where `Group.account` doesn't
-  /// carry the same `name`/`type` as the `Account` returned by
-  /// `accounts.getAll()`), falls back to showing all groups so the user
-  /// can still pick the right one.
-  Future<List<Group?>> _loadGroups(String accountKey) async {
-    try {
-      final all = await FlutterContacts.groups.getAll();
-      if (all.isEmpty) return const [];
+  /// Loads groups scoped to [accountKey] by querying Android's
+  /// ContactsContract.Groups table directly through a MethodChannel.
+  /// This bypasses flutter_contacts.groups.getAll(), which returns an
+  /// empty list on some devices.
+  Future<List<NativeGroup>> _loadGroups(String accountKey) async {
+    final all = await GroupQuery.fetchAll();
+    if (all.isEmpty) return const [];
 
-      final filtered = all.where((g) {
-        if (g == null) return false;
-        try {
-          final gAccount = (g as dynamic).account as Account?;
-          if (gAccount == null) return true;
-          final key = ContactRepository.accountKey(gAccount);
-          // If the group's account has no usable identity, don't exclude.
-          if (key == '|') return true;
-          return key == accountKey;
-        } catch (_) {
-          return true;
-        }
-      }).toList();
-
-      return filtered.isNotEmpty ? filtered : all;
-    } catch (_) {
-      return const [];
-    }
+    final filtered = all.where((g) => g.accountKey == accountKey).toList();
+    // Fall back to showing all groups if the account scoping excludes
+    // everything — the accountName in ContactsContract.Groups can be
+    // slightly different from Account.name on some sync adapters.
+    return filtered.isNotEmpty ? filtered : all;
   }
 
   void _showSnack(String message) {
@@ -325,7 +306,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
-                        // ── SHOWING ─────────────────────────────────
                         const FeatherLayer(
                           index: 1,
                           child: Padding(
@@ -361,8 +341,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-
-                        // ── CONTACT DISPLAY ─────────────────────────
                         const FeatherLayer(
                           index: 4,
                           child: Padding(
@@ -400,8 +378,6 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
-
-                        // ── THEMING ─────────────────────────────────
                         const FeatherLayer(
                           index: 6,
                           child: Padding(
@@ -476,7 +452,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-/// A settings row that displays a current value and opens a picker on tap.
 class _FilterRow extends StatelessWidget {
   final String label;
   final String value;
@@ -534,7 +509,6 @@ class _FilterRow extends StatelessWidget {
   }
 }
 
-/// One selectable option in a picker dialog.
 class _ChoiceOption {
   final String id;
   final String label;
@@ -546,7 +520,6 @@ class _ChoiceOption {
   });
 }
 
-/// A WP-styled radio picker dialog.
 class _ChoiceDialog extends StatelessWidget {
   final String title;
   final List<_ChoiceOption> options;
