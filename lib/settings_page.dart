@@ -2,36 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'other/accent_color.dart';
+import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 
-/// MethodChannel used to ask Android whether a given package is installed.
-/// Must match the channel name declared in MainActivity.kt.
 const _packageCheckChannel = MethodChannel(
   'com.example.flutter_metro_contacts/package_check',
 );
 
-/// Package ID of MetroV Navbar. If installed, we surface a note telling
-/// the user to match its background color to ours.
 const _metroVPackage = 'com.tuzkituan.metrov.navbar';
 
-/// Background color of the bottom app bar and everything that should
-/// visually align with it.
 const _barBackgroundHex = '#1F1F1F';
 
 class SettingsPage extends StatefulWidget {
   final VoidCallback? onPopStart;
-  const SettingsPage({super.key, this.onPopStart});
+  final Settings settings;
+
+  const SettingsPage({
+    super.key,
+    this.onPopStart,
+    required this.settings,
+  });
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool _prioritizeNicknames = false;
-  bool _parseNotesForAccentColor = false;
-
-  /// null while the check is in flight, true/false once resolved.
-  /// The note is hidden while null so it doesn't flash in and out.
   bool? _metroVInstalled;
 
   @override
@@ -150,13 +146,18 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: WpToggleSwitch(
-                              header:
-                              'Prioritize Nicknames instead of legal names',
-                              value: _prioritizeNicknames,
-                              accentColor: AccentColor,
-                              onChanged: (v) => setState(
-                                      () => _prioritizeNicknames = v),
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable:
+                              widget.settings.prioritizeNicknames,
+                              builder: (context, value, _) => WpToggleSwitch(
+                                header:
+                                'Prioritize Nicknames instead of legal names',
+                                value: value,
+                                accentColor: AccentColor,
+                                onChanged: (v) =>
+                                widget.settings.prioritizeNicknames.value =
+                                    v,
+                              ),
                             ),
                           ),
                         ),
@@ -182,12 +183,16 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: WpToggleSwitch(
-                              header: 'Parse Notes for Accent Color',
-                              accentColor: AccentColor,
-                              value: _parseNotesForAccentColor,
-                              onChanged: (v) => setState(
-                                      () => _parseNotesForAccentColor = v),
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable:
+                              widget.settings.parseNotesForAccentColor,
+                              builder: (context, value, _) => WpToggleSwitch(
+                                header: 'Parse Notes for Accent Color',
+                                accentColor: AccentColor,
+                                value: value,
+                                onChanged: (v) => widget
+                                    .settings.parseNotesForAccentColor.value = v,
+                              ),
                             ),
                           ),
                         ),

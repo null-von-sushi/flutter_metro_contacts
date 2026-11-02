@@ -38,15 +38,10 @@ class Contact {
   final bool hasSignal;
   final bool hasWeChat;
 
-  // Optional identifiers extracted from a phone label or URL.
-  // null when the contact has the messenger (via account) but no
-  // specific handle was found.
   final String? signalId;
   final String? telegramId;
   final String? weChatId;
 
-  /// Per-contact accent color, derived from a "favorite color" mention
-  /// in the contact's notes. Null means "use the global AccentColor".
   final Color? accentColor;
 
   const Contact({
@@ -115,16 +110,29 @@ class Contact {
     );
   }
 
-  String get displayTitle =>
-      (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
-
-  String get displaySubtitle {
-    if (nickname != null && nickname!.isNotEmpty && nickname != name) {
-      return name;
+  /// Title for list views (ContactTile). Respects the "prioritize
+  /// nicknames" toggle: nickname-first when [prioritizeNicknames] is
+  /// true, legal-name-first otherwise.
+  String displayTitle(bool prioritizeNicknames) {
+    if (prioritizeNicknames) {
+      return (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
     }
-    return status;
+    return name;
   }
 
+  /// Subtitle for list views, paired with [displayTitle]. Shows the
+  /// "other" name when one exists, else the status.
+  String displaySubtitle(bool prioritizeNicknames) {
+    final hasNickname =
+        nickname != null && nickname!.isNotEmpty && nickname != name;
+    if (prioritizeNicknames) {
+      return hasNickname ? name : status;
+    }
+    return hasNickname ? nickname! : status;
+  }
+
+  /// Header for the detail page — always shows both name and nickname,
+  /// regardless of the "prioritize nicknames" toggle.
   String get detailsTitle {
     if (nickname != null && nickname!.isNotEmpty && nickname != name) {
       return '$name ($nickname)';
@@ -141,8 +149,6 @@ class Contact {
   int get detailsMaxIndex {
     int count = 2;
     count += phones.length * 2;
-    // Signal section shows if hasSignal AND we have either a specific
-    // ID or at least one phone to fall back to.
     if (hasSignal && (signalId != null || phones.isNotEmpty)) count += 1;
     if (hasTelegram && (telegramId != null || phones.isNotEmpty)) count += 1;
     if (hasWeChat && (weChatId != null || phones.isNotEmpty)) count += 1;

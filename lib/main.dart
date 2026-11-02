@@ -4,9 +4,10 @@ import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
-import 'contact_details.dart'; // <-- Imported the new page
+import 'contact_details.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
+import 'other/settings.dart';
 import 'data/contact_repository.dart';
 import 'transitions/wp_phone_transition.dart';
 
@@ -15,8 +16,27 @@ void main() => runApp(const MyApp());
 /// Layers on PeoplePage: pivot=0, bottom bar=1.
 const int _homeMaxIndex = 1;
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final Settings _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = Settings();
+  }
+
+  @override
+  void dispose() {
+    _settings.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,14 +52,16 @@ class MyApp extends StatelessWidget {
       initialRoute: Navigator.defaultRouteName,
       onGenerateRoute: (settings) => MaterialPageRoute(
         settings: settings,
-        builder: (_) => const PeoplePage(),
+        builder: (_) => PeoplePage(settings: _settings),
       ),
     );
   }
 }
 
 class PeoplePage extends StatefulWidget {
-  const PeoplePage({super.key});
+  final Settings settings;
+
+  const PeoplePage({super.key, required this.settings});
 
   @override
   State<PeoplePage> createState() => _PeoplePageState();
@@ -74,10 +96,11 @@ class _PeoplePageState extends State<PeoplePage>
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 5, // Settings has layers 0-4 now
+        incomingMaxIndex: 5,
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => SettingsPage(
           onPopStart: _exitController.reverse,
+          settings: widget.settings,
         ),
       ),
     );
@@ -91,6 +114,7 @@ class _PeoplePageState extends State<PeoplePage>
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => ContactDetailsPage(
           contact: contact,
+          settings: widget.settings,
           onPopStart: _exitController.reverse,
         ),
       ),
@@ -147,7 +171,8 @@ class _PeoplePageState extends State<PeoplePage>
                       return SizedBox.expand(
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 48),
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 48),
                             child: SizedBox(
                               width: double.infinity,
                               height: 4,
@@ -178,34 +203,46 @@ class _PeoplePageState extends State<PeoplePage>
                     return ContactList(
                       contacts: data.contacts,
                       meContact: data.meContact,
-                      onContactTap: _openDetails, // <-- Wired up here
+                      onContactTap: _openDetails,
+                      settings: widget.settings,
                     );
                   },
                 ),
-                const ContactList(contacts: []),
-                const ContactList(contacts: []),
+                ContactList(
+                  contacts: const [],
+                  settings: widget.settings,
+                ),
+                ContactList(
+                  contacts: const [],
+                  settings: widget.settings,
+                ),
               ],
             ),
           ),
         ),
-          bottomNavigationBar: FeatherLayer(
-            index: 1,
-            child: WpBottomAppBar(
-              actions: [
-                WpApplicationBarAction(
-                  icon: const Icon(Icons.add, weight: 1000, size: 30, color: Colors.white),
-                  label: 'add',
-                  onPressed: _addNewContact,
+        bottomNavigationBar: FeatherLayer(
+          index: 1,
+          child: WpBottomAppBar(
+            actions: [
+              WpApplicationBarAction(
+                icon: const Icon(
+                  Icons.add,
+                  weight: 1000,
+                  size: 30,
+                  color: Colors.white,
                 ),
-              ],
-              menuItems: [
-                WpApplicationBarMenuItem(
-                  label: 'settings',
-                  onPressed: _openSettings,
-                ),
-              ],
-            ),
+                label: 'add',
+                onPressed: _addNewContact,
+              ),
+            ],
+            menuItems: [
+              WpApplicationBarMenuItem(
+                label: 'settings',
+                onPressed: _openSettings,
+              ),
+            ],
           ),
+        ),
       ),
     );
   }

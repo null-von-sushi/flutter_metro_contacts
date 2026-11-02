@@ -14,8 +14,6 @@ class MeTile extends StatelessWidget {
         ? contact.name[0].toUpperCase()
         : '#';
 
-    // Prefer the full-resolution photo when available; fall back to the
-    // thumbnail that was fetched with the list.
     final bytes = contact.photoFull ?? contact.photo;
 
     return InkWell(
@@ -37,8 +35,6 @@ class MeTile extends StatelessWidget {
                 width: 120,
                 height: 120,
                 fit: BoxFit.cover,
-                // 120 px @ 3.5× ≈ 420 px. Decode at 360 (3×) for a
-                // good balance of sharpness and memory.
                 cacheWidth: 360,
                 cacheHeight: 360,
               )
@@ -123,14 +119,23 @@ class SectionHeaderTile extends StatelessWidget {
 class ContactTile extends StatelessWidget {
   final Contact contact;
   final VoidCallback? onTap;
+  final bool prioritizeNicknames;
 
-  const ContactTile({super.key, required this.contact, this.onTap});
+  const ContactTile({
+    super.key,
+    required this.contact,
+    this.onTap,
+    this.prioritizeNicknames = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final avatarLetter = contact.name.isNotEmpty
         ? contact.name[0].toUpperCase()
         : '#';
+
+    final title = contact.displayTitle(prioritizeNicknames);
+    final subtitle = contact.displaySubtitle(prioritizeNicknames);
 
     return InkWell(
       onTap: onTap,
@@ -151,8 +156,6 @@ class ContactTile extends StatelessWidget {
                 width: 56,
                 height: 56,
                 fit: BoxFit.cover,
-                // 56 px @ 3.5× ≈ 196 px. Thumbnails are ~200 px, so
-                // a 168 px cache target keeps it crisp without waste.
                 cacheWidth: 168,
                 cacheHeight: 168,
               )
@@ -173,16 +176,16 @@ class ContactTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    contact.displayTitle,
+                    title,
                     style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w400,
                       color: Colors.white,
                     ),
                   ),
-                  if (contact.displaySubtitle.isNotEmpty)
+                  if (subtitle.isNotEmpty)
                     Text(
-                      contact.displaySubtitle,
+                      subtitle,
                       style: const TextStyle(
                         fontSize: 14,
                         color: Colors.white54,

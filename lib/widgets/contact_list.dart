@@ -3,6 +3,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../data/class_contact.dart';
 import '../data/list_entry.dart';
 import '../logic/contact_grouper.dart';
+import '../other/settings.dart';
 import 'contact_widgets.dart';
 import 'letter_grid_overlay.dart';
 
@@ -10,10 +11,12 @@ class ContactList extends StatefulWidget {
   final List<Contact> contacts;
   final Contact? meContact;
   final void Function(Contact)? onContactTap;
+  final Settings settings;
 
   const ContactList({
     super.key,
     required this.contacts,
+    required this.settings,
     this.meContact,
     this.onContactTap,
   });
@@ -61,37 +64,45 @@ class ContactListState extends State<ContactList> {
 
   @override
   Widget build(BuildContext context) {
-    if (_entries.isEmpty) {
-      return const Center(
-        child: Text(
-          'No contacts in this category.',
-          style: TextStyle(color: Colors.white54),
-        ),
-      );
-    }
+    // Rebuilds the whole list when the "prioritize nicknames" setting
+    // changes, so titles and subtitles update immediately.
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.settings.prioritizeNicknames,
+      builder: (context, prioritizeNicknames, _) {
+        if (_entries.isEmpty) {
+          return const Center(
+            child: Text(
+              'No contacts in this category.',
+              style: TextStyle(color: Colors.white54),
+            ),
+          );
+        }
 
-    return ScrollablePositionedList.builder(
-      itemScrollController: _scrollController,
-      itemCount: _entries.length,
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      itemBuilder: (context, index) {
-        final entry = _entries[index];
-        if (entry is MeEntry) {
-          return MeTile(
-            contact: entry.contact,
-            onTap: () => widget.onContactTap?.call(entry.contact),
-          );
-        }
-        if (entry is HeaderEntry) {
-          return SectionHeaderTile(
-            letter: entry.letter,
-            onTap: _showLetterGrid,
-          );
-        }
-        final contact = (entry as ContactEntry).contact;
-        return ContactTile(
-          contact: contact,
-          onTap: () => widget.onContactTap?.call(contact),
+        return ScrollablePositionedList.builder(
+          itemScrollController: _scrollController,
+          itemCount: _entries.length,
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          itemBuilder: (context, index) {
+            final entry = _entries[index];
+            if (entry is MeEntry) {
+              return MeTile(
+                contact: entry.contact,
+                onTap: () => widget.onContactTap?.call(entry.contact),
+              );
+            }
+            if (entry is HeaderEntry) {
+              return SectionHeaderTile(
+                letter: entry.letter,
+                onTap: _showLetterGrid,
+              );
+            }
+            final contact = (entry as ContactEntry).contact;
+            return ContactTile(
+              contact: contact,
+              prioritizeNicknames: prioritizeNicknames,
+              onTap: () => widget.onContactTap?.call(contact),
+            );
+          },
         );
       },
     );
