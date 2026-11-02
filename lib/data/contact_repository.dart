@@ -7,7 +7,27 @@ import 'class_contact.dart';
 const int _noYearSentinel = 1804;
 
 class ContactRepository {
-  Future<({List<Contact> contacts, Contact? meContact})> fetchContacts() async {
+  /// Stable identifier for an Android account.
+  ///
+  /// `Account.id` is unreliable — on many devices it's null or shared
+  /// across multiple accounts. The Contacts Provider identifies accounts
+  /// by the `(account_type, account_name)` pair, so we use that here.
+  static String accountKey(Account a) {
+    return '${a.type ?? ''}|${a.name ?? ''}';
+  }
+
+  /// Fetch contacts, optionally restricted to a single account and/or
+  /// group.
+  ///
+  /// [accountId] is the composite key produced by [accountKey].
+  /// [groupId] is a `Group.id` from `FlutterContacts.groups.getAll()`.
+  /// Both are nullable; null means "no restriction". If a provided
+  /// account key no longer matches any installed account, the filter is
+  /// dropped and the full list is returned.
+  Future<({List<Contact> contacts, Contact? meContact})> fetchContacts({
+    String? accountId,
+    String? groupId,
+  }) async {
     if (kDebugMode) {
       await Future.delayed(const Duration(seconds: 5));
     }
@@ -20,7 +40,30 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
+    // Resolve the account, if a filter was requested.
+    Account? account;
+    if (accountId != null) {
+      try {
+        final accounts = await FlutterContacts.accounts.getAll();
+        for (final raw in accounts) {
+          final a = raw as Account?;
+          if (a != null && accountKey(a) == accountId) {
+            account = a;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Build the group filter if both account and group are resolved.
+    ContactFilter? filter;
+    if (account != null && groupId != null) {
+      filter = ContactFilter.group(groupId);
+    }
+
     final fetchedContacts = await FlutterContacts.getAll(
+      account: account,
+      filter: filter,
       properties: {
         ContactProperty.name,
         ContactProperty.photoThumbnail,
@@ -45,7 +88,6 @@ class ContactRepository {
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
-      // ── Messenger detection: account type OR phone label OR URL ──
       final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
           .map((rc) => rc.account?.type)
           .whereType<String>()
@@ -71,7 +113,6 @@ class ContactRepository {
       final hasWeChat = weChatId != null ||
           accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
 
-      // ── Notes + derived favorite color ──
       final notes = _mapNotes(c);
       final accentColor = _extractFavoriteColor(notes);
 
@@ -125,15 +166,10 @@ class ContactRepository {
 
   // ── Messenger ID detection ──────────────────────────────────────────
 
-  /// Finds the best available identifier for a messenger, checking URLs
-  /// (Website + IMPP) first, then phone labels. Returns null if none found.
   String? _findMessengerId(dynamic c, List<String> labels) {
     return _findIdFromUrls(c, labels) ?? _findIdFromPhoneLabels(c, labels);
   }
 
-  /// Checks every URL on the contact (from Website.url and
-  /// SocialMedia.userName) against [labels] as case-insensitive prefixes.
-  /// Returns the extracted handle from the first match, or null.
   String? _findIdFromUrls(dynamic c, List<String> labels) {
     final urls = <String>[];
     try {
@@ -160,8 +196,6 @@ class ContactRepository {
     return null;
   }
 
-  /// Checks each phone's resolved header against [labels]. Returns the
-  /// phone number of the first matching phone, or null.
   String? _findIdFromPhoneLabels(dynamic c, List<String> labels) {
     try {
       for (final p in (c.phones as List)) {
@@ -175,19 +209,10 @@ class ContactRepository {
     return null;
   }
 
-  /// Extracts the human-meaningful handle from a URL that was already
-  /// confirmed to start with [prefix]. Order of preference:
-  ///   query param (?username=, ?user=, ?id=, ?phone=)
-  ///   bare query (?johndoe)
-  ///   fragment last segment (#p/+441234567890)
-  ///   path last segment (/user/johndoe)
-  ///   host (fallback)
-  ///   full URL (last resort)
   String _extractHandleFromUrl(String url, String prefix) {
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
 
-    // 1. Named query parameter.
     if (uri.queryParameters.isNotEmpty) {
       final known = uri.queryParameters['username'] ??
           uri.queryParameters['user'] ??
@@ -195,44 +220,27 @@ class ContactRepository {
           uri.queryParameters['phone'];
       if (known != null && known.isNotEmpty) return known;
     }
-
-    // 2. Bare query with no '=' (e.g. weixin://dl/chat?johndoe).
     if (uri.query.isNotEmpty && !uri.query.contains('=')) {
       return uri.query;
     }
-
-    // 3. Fragment last segment (e.g. signal.me/#p/+441234567890).
     if (uri.fragment.isNotEmpty) {
       final frag = uri.fragment;
       return frag.contains('/') ? frag.split('/').last : frag;
     }
-
-    // 4. Path last segment.
     if (uri.pathSegments.isNotEmpty) {
       final last = uri.pathSegments.last;
       if (last.isNotEmpty) return last;
     }
-
-    // 5. Host.
     if (uri.host.isNotEmpty) return uri.host;
-
-    // 6. Give up — return the whole URL so the user can see what we got.
     return url;
   }
 
   // ── Favorite color extraction ───────────────────────────────────────
 
-  /// Scans each note for a "favorite colour" phrase and resolves the
-  /// captured text to a [Color]. Returns the first successful match, or
-  /// null if nothing recognisable was found.
   Color? _extractFavoriteColor(List<String> notes) {
     for (final note in notes) {
       for (final patternStr in FavoriteColorDetection.patterns) {
-        final regex = RegExp(
-          patternStr,
-          caseSensitive: false,
-          multiLine: true,
-        );
+        final regex = RegExp(patternStr, caseSensitive: false, multiLine: true);
         final match = regex.firstMatch(note);
         if (match == null) continue;
         final raw = match.group(1);
@@ -244,10 +252,7 @@ class ContactRepository {
     return null;
   }
 
-  /// Resolves a raw captured string (e.g. "#1212FF", "red", "紫色") to a
-  /// [Color]. Tries hex first, then named colours.
   Color? _resolveColorFromText(String text) {
-    // 1. Hex code (#RRGGBB or #AARRGGBB).
     final hexMatch =
     RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b').firstMatch(text);
     if (hexMatch != null) {
@@ -256,9 +261,6 @@ class ContactRepository {
       return Color(int.parse(padded, radix: 16));
     }
 
-    // 2. Named colour. Build the pattern dynamically from the map keys so
-    //    adding a new language to `colorMap` automatically makes its
-    //    entries matchable here.
     final sortedKeys = FavoriteColorDetection.colorMap.keys.toList()
       ..sort((a, b) => b.length.compareTo(a.length));
     final pattern = sortedKeys.map(RegExp.escape).join('|');
@@ -269,7 +271,6 @@ class ContactRepository {
       final hex = FavoriteColorDetection.colorMap[key];
       if (hex != null) return Color(hex);
     }
-
     return null;
   }
 
@@ -412,7 +413,6 @@ class ContactRepository {
         return DateTime(_noYearSentinel, m, d);
       }
     }
-
     return null;
   }
 
@@ -468,20 +468,17 @@ class ContactRepository {
 
   String _headerFor(dynamic item, {required String fallback}) {
     final labelObj = _tryRead(item, 'label');
-
     final custom = _tryReadString(labelObj, 'customLabel') ??
         _tryReadString(item, 'customLabel');
     if (custom != null && custom.isNotEmpty) {
       return custom;
     }
-
     final standard = _labelDisplayName(labelObj);
     if (standard != null &&
         standard.isNotEmpty &&
         standard.toLowerCase() != 'custom') {
       return _capitalizeFirst(standard);
     }
-
     return fallback;
   }
 
@@ -496,7 +493,6 @@ class ContactRepository {
         if (n != null && n.isNotEmpty) return n;
       }
     } catch (_) {}
-
     try {
       final n = (labelObj as dynamic).name;
       if (n is String && n.isNotEmpty) return n;
@@ -508,7 +504,6 @@ class ContactRepository {
 
     final parts = s.split('.');
     if (parts.length > 1) return parts.last;
-
     return null;
   }
 

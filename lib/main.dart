@@ -12,19 +12,15 @@ import 'data/contact_repository.dart';
 import 'transitions/wp_phone_transition.dart';
 
 void main() async {
-  // Required before calling SharedPreferences in Settings.load()
   WidgetsFlutterBinding.ensureInitialized();
-
   final settings = await Settings.load();
   runApp(MyApp(appSettings: settings));
 }
 
-/// Layers on PeoplePage: pivot=0, bottom bar=1.
 const int _homeMaxIndex = 1;
 
 class MyApp extends StatefulWidget {
   final Settings appSettings;
-
   const MyApp({super.key, required this.appSettings});
 
   @override
@@ -60,7 +56,6 @@ class _MyAppState extends State<MyApp> {
 
 class PeoplePage extends StatefulWidget {
   final Settings settings;
-
   const PeoplePage({super.key, required this.settings});
 
   @override
@@ -70,8 +65,10 @@ class PeoplePage extends StatefulWidget {
 class _PeoplePageState extends State<PeoplePage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _exitController;
-  late Future<({List<Contact> contacts, Contact? meContact})> _contactsFuture;
+  late Future<({List<Contact> contacts, Contact? meContact})> _allPivotFuture;
   final _contactRepository = ContactRepository();
+
+  late final Listenable _filterListenable;
 
   @override
   void initState() {
@@ -83,13 +80,35 @@ class _PeoplePageState extends State<PeoplePage>
         incomingMaxIndex: 5,
       ).routeDuration(),
     );
-    _contactsFuture = _contactRepository.fetchContacts();
+
+    _filterListenable = Listenable.merge([
+      widget.settings.accountFilter,
+      widget.settings.groupFilter,
+    ]);
+    _filterListenable.addListener(_onFilterChanged);
+
+    _allPivotFuture = _fetchFiltered();
   }
 
   @override
   void dispose() {
+    _filterListenable.removeListener(_onFilterChanged);
     _exitController.dispose();
     super.dispose();
+  }
+
+  void _onFilterChanged() {
+    if (!mounted) return;
+    setState(() {
+      _allPivotFuture = _fetchFiltered();
+    });
+  }
+
+  Future<({List<Contact> contacts, Contact? meContact})> _fetchFiltered() {
+    return _contactRepository.fetchContacts(
+      accountId: widget.settings.accountFilter.value,
+      groupId: widget.settings.groupFilter.value,
+    );
   }
 
   void _openSettings() {
@@ -165,7 +184,7 @@ class _PeoplePageState extends State<PeoplePage>
               children: [
                 FutureBuilder<
                     ({List<Contact> contacts, Contact? meContact})>(
-                  future: _contactsFuture,
+                  future: _allPivotFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return SizedBox.expand(
@@ -195,7 +214,7 @@ class _PeoplePageState extends State<PeoplePage>
                     if (data == null || data.contacts.isEmpty) {
                       return const Center(
                         child: Text(
-                          'No contacts found or permission denied.',
+                          'No contacts match the current filter.',
                           style: TextStyle(color: Colors.white70),
                         ),
                       );
@@ -208,14 +227,9 @@ class _PeoplePageState extends State<PeoplePage>
                     );
                   },
                 ),
-                ContactList(
-                  contacts: const [],
-                  settings: widget.settings,
-                ),
-                ContactList(
-                  contacts: const [],
-                  settings: widget.settings,
-                ),
+                // Favorites and Recent pivots intentionally empty for now.
+                ContactList(contacts: const [], settings: widget.settings),
+                ContactList(contacts: const [], settings: widget.settings),
               ],
             ),
           ),

@@ -3,42 +3,50 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// App-wide user preferences.
 ///
-/// Two boolean toggles are surfaced so far, both from the Settings page:
+/// Three kinds of state live here:
 ///
-/// * [prioritizeNicknames]: when true, contacts are shown with their
-///   nickname as the title and their legal name as the subtitle. When
-///   false, the legal name is the title and the nickname (if any) the
-///   subtitle. The detail page is unaffected — it always shows both.
+/// * Display toggles: [prioritizeNicknames], [parseNotesForAccentColor].
+/// * List filters: [accountFilter] (Account.id) and [groupFilter] (Group.id).
+///   `null` means "no restriction".
+/// * Persistence: values are loaded on startup and written back whenever
+///   a notifier changes.
 ///
-/// * [parseNotesForAccentColor]: when true, a "favorite colour" phrase
-///   in a contact's notes overrides the global accent colour for that
-///   contact's detail page. When false, the global accent is always used.
-///
-/// Settings are persisted to disk using [SharedPreferences] and loaded
-/// automatically via the [load] factory. Toggling a value updates the
-/// notifier and triggers an asynchronous save in the background.
+/// Filters only apply to the main "all" pivot in PeoplePage. The favorites
+/// and recent pivots intentionally ignore them.
 class Settings {
   final ValueNotifier<bool> prioritizeNicknames;
   final ValueNotifier<bool> parseNotesForAccentColor;
 
+  /// Account.id to restrict the list to. `null` = show all accounts.
+  final ValueNotifier<String?> accountFilter;
+
+  /// Group.id to restrict the list to. Only meaningful when an account is
+  /// selected, since groups are account-scoped on Android.
+  final ValueNotifier<String?> groupFilter;
+
   Settings._({
     required bool prioritizeNicknames,
     required bool parseNotesForAccentColor,
+    required String? accountFilter,
+    required String? groupFilter,
   })  : prioritizeNicknames = ValueNotifier(prioritizeNicknames),
-        parseNotesForAccentColor = ValueNotifier(parseNotesForAccentColor) {
-    // Persist whenever either toggle changes.
+        parseNotesForAccentColor = ValueNotifier(parseNotesForAccentColor),
+        accountFilter = ValueNotifier(accountFilter),
+        groupFilter = ValueNotifier(groupFilter) {
     this.prioritizeNicknames.addListener(_save);
     this.parseNotesForAccentColor.addListener(_save);
+    this.accountFilter.addListener(_save);
+    this.groupFilter.addListener(_save);
   }
 
-  /// Loads persisted settings from disk. Call this in `main()` before
-  /// `runApp` to ensure the UI reflects the saved state on first frame.
   static Future<Settings> load() async {
     final prefs = await SharedPreferences.getInstance();
     return Settings._(
       prioritizeNicknames: prefs.getBool('prioritizeNicknames') ?? false,
       parseNotesForAccentColor:
       prefs.getBool('parseNotesForAccentColor') ?? false,
+      accountFilter: prefs.getString('accountFilter'),
+      groupFilter: prefs.getString('groupFilter'),
     );
   }
 
@@ -47,10 +55,24 @@ class Settings {
     await prefs.setBool('prioritizeNicknames', prioritizeNicknames.value);
     await prefs.setBool(
         'parseNotesForAccentColor', parseNotesForAccentColor.value);
+    final acc = accountFilter.value;
+    final grp = groupFilter.value;
+    if (acc == null) {
+      await prefs.remove('accountFilter');
+    } else {
+      await prefs.setString('accountFilter', acc);
+    }
+    if (grp == null) {
+      await prefs.remove('groupFilter');
+    } else {
+      await prefs.setString('groupFilter', grp);
+    }
   }
 
   void dispose() {
     prioritizeNicknames.dispose();
     parseNotesForAccentColor.dispose();
+    accountFilter.dispose();
+    groupFilter.dispose();
   }
 }

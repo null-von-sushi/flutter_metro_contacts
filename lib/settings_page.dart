@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:wp_pivot_flutter/wp_components.dart';
+import 'data/contact_repository.dart';
 import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
+import 'widgets/wp_button.dart';
 
 const _packageCheckChannel = MethodChannel(
   'com.example.flutter_metro_contacts/package_check',
@@ -30,10 +33,67 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool? _metroVInstalled;
 
+  String? _accountDisplayName;
+  String? _groupDisplayName;
+
   @override
   void initState() {
     super.initState();
     _checkMetroVInstalled();
+    _refreshFilterDisplayNames();
+    widget.settings.accountFilter.addListener(_refreshFilterDisplayNames);
+    widget.settings.groupFilter.addListener(_refreshFilterDisplayNames);
+  }
+
+  @override
+  void dispose() {
+    widget.settings.accountFilter.removeListener(_refreshFilterDisplayNames);
+    widget.settings.groupFilter.removeListener(_refreshFilterDisplayNames);
+    super.dispose();
+  }
+
+  Future<void> _refreshFilterDisplayNames() async {
+    final accountId = widget.settings.accountFilter.value;
+    final groupId = widget.settings.groupFilter.value;
+
+    String? accountName;
+    String? groupName;
+
+    if (accountId != null) {
+      try {
+        final accounts = await FlutterContacts.accounts.getAll();
+        for (final raw in accounts) {
+          final a = raw as Account?;
+          if (a == null) continue;
+          if (ContactRepository.accountKey(a) == accountId) {
+            accountName = (a.name?.isNotEmpty ?? false)
+                ? a.name!
+                : (a.type ?? accountId);
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (groupId != null) {
+      try {
+        final groups = await FlutterContacts.groups.getAll();
+        for (final raw in groups) {
+          final g = raw as Group?;
+          if (g?.id == groupId) {
+            groupName =
+            (g?.name?.isNotEmpty ?? false) ? g!.name! : groupId;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _accountDisplayName = accountName;
+      _groupDisplayName = groupName;
+    });
   }
 
   Future<void> _checkMetroVInstalled() async {
@@ -69,10 +129,150 @@ class _SettingsPageState extends State<SettingsPage> {
     Navigator.of(context).pop();
   }
 
+  // ── Account picker ──────────────────────────────────────────────────
+
+  Future<void> _pickAccount() async {
+    final accounts = await _loadAccounts();
+    if (!mounted) return;
+
+    final selected = await showDialog<String?>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => _ChoiceDialog(
+        title: 'Account',
+        options: [
+          const _ChoiceOption(
+              id: '__all__', label: 'all accounts', subtitle: ''),
+          for (final raw in accounts)
+            if (raw != null)
+              _ChoiceOption(
+                id: ContactRepository.accountKey(raw),
+                label: (raw.name?.isNotEmpty ?? false)
+                    ? raw.name!
+                    : (raw.type ?? 'unknown'),
+                subtitle: raw.type ?? '',
+              ),
+        ],
+        currentId: widget.settings.accountFilter.value ?? '__all__',
+      ),
+    );
+
+    if (!mounted || selected == null) return;
+
+    if (selected == '__all__') {
+      widget.settings.accountFilter.value = null;
+      widget.settings.groupFilter.value = null;
+    } else {
+      widget.settings.accountFilter.value = selected;
+      widget.settings.groupFilter.value = null;
+    }
+  }
+
+  // ── Group picker ────────────────────────────────────────────────────
+
+  Future<void> _pickGroup() async {
+    final accountKey = widget.settings.accountFilter.value;
+    if (accountKey == null) {
+      _showSnack('Pick an account first');
+      return;
+    }
+    final groups = await _loadGroups(accountKey);
+    if (!mounted) return;
+
+    if (groups.isEmpty) {
+      _showSnack('No groups found');
+      return;
+    }
+
+    final selected = await showDialog<String?>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => _ChoiceDialog(
+        title: 'Group',
+        options: [
+          const _ChoiceOption(
+              id: '__all__', label: 'all groups in account', subtitle: ''),
+          for (final raw in groups)
+            if (raw != null)
+              _ChoiceOption(
+                id: raw.id ?? '',
+                label: (raw.name?.isNotEmpty ?? false)
+                    ? raw.name!
+                    : 'unnamed group',
+                subtitle: '',
+              ),
+        ],
+        currentId: widget.settings.groupFilter.value ?? '__all__',
+      ),
+    );
+
+    if (!mounted || selected == null) return;
+
+    widget.settings.groupFilter.value =
+    selected == '__all__' ? null : selected;
+  }
+
+  Future<List<Account?>> _loadAccounts() async {
+    try {
+      final list = await FlutterContacts.accounts.getAll();
+      return list;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Loads groups. Tries to scope by account first; if that would exclude
+  /// everything (which happens on devices where `Group.account` doesn't
+  /// carry the same `name`/`type` as the `Account` returned by
+  /// `accounts.getAll()`), falls back to showing all groups so the user
+  /// can still pick the right one.
+  Future<List<Group?>> _loadGroups(String accountKey) async {
+    try {
+      final all = await FlutterContacts.groups.getAll();
+      if (all.isEmpty) return const [];
+
+      final filtered = all.where((g) {
+        if (g == null) return false;
+        try {
+          final gAccount = (g as dynamic).account as Account?;
+          if (gAccount == null) return true;
+          final key = ContactRepository.accountKey(gAccount);
+          // If the group's account has no usable identity, don't exclude.
+          if (key == '|') return true;
+          return key == accountKey;
+        } catch (_) {
+          return true;
+        }
+      }).toList();
+
+      return filtered.isNotEmpty ? filtered : all;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1F1F1F),
+        content: Text(message,
+            style: const TextStyle(color: Colors.white)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final route = ModalRoute.of(context);
     final anim = route?.animation ?? const AlwaysStoppedAnimation(1.0);
+
+    final accountLabel = widget.settings.accountFilter.value == null
+        ? 'all accounts'
+        : (_accountDisplayName ?? widget.settings.accountFilter.value!);
+    final groupLabel = widget.settings.groupFilter.value == null
+        ? 'all groups'
+        : (_groupDisplayName ?? widget.settings.groupFilter.value!);
 
     return PopScope(
       canPop: false,
@@ -125,8 +325,46 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
+                        // ── SHOWING ─────────────────────────────────
                         const FeatherLayer(
                           index: 1,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16.0, vertical: 8.0),
+                            child: Text(
+                              'SHOWING',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.2,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ),
+                        ),
+                        FeatherLayer(
+                          index: 2,
+                          child: _FilterRow(
+                            label: 'account',
+                            value: accountLabel,
+                            onTap: _pickAccount,
+                          ),
+                        ),
+                        FeatherLayer(
+                          index: 3,
+                          child: _FilterRow(
+                            label: 'group',
+                            value: groupLabel,
+                            onTap: widget.settings.accountFilter.value != null
+                                ? _pickGroup
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── CONTACT DISPLAY ─────────────────────────
+                        const FeatherLayer(
+                          index: 4,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -142,7 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 2,
+                          index: 5,
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
@@ -162,8 +400,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // ── THEMING ─────────────────────────────────
                         const FeatherLayer(
-                          index: 3,
+                          index: 6,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -179,7 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 4,
+                          index: 7,
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
@@ -199,7 +439,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (_metroVInstalled == true) ...[
                           const SizedBox(height: 24),
                           FeatherLayer(
-                            index: 5,
+                            index: 8,
                             child: InkWell(
                               onTap: _copyBarColorHex,
                               splashFactory: NoSplash.splashFactory,
@@ -231,6 +471,183 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A settings row that displays a current value and opens a picker on tap.
+class _FilterRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  const _FilterRow({
+    required this.label,
+    required this.value,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return InkWell(
+      onTap: onTap,
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.white.withOpacity(0.06),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 96,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white54,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w300,
+                  color: enabled ? Colors.white : Colors.white30,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: enabled ? Colors.white38 : Colors.white12,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One selectable option in a picker dialog.
+class _ChoiceOption {
+  final String id;
+  final String label;
+  final String subtitle;
+  const _ChoiceOption({
+    required this.id,
+    required this.label,
+    this.subtitle = '',
+  });
+}
+
+/// A WP-styled radio picker dialog.
+class _ChoiceDialog extends StatelessWidget {
+  final String title;
+  final List<_ChoiceOption> options;
+  final String currentId;
+
+  const _ChoiceDialog({
+    required this.title,
+    required this.options,
+    required this.currentId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1F1F1F),
+      elevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (context, index) {
+                final opt = options[index];
+                final selected = opt.id == currentId;
+                return InkWell(
+                  onTap: () => Navigator.pop(context, opt.id),
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.white.withOpacity(0.06),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          selected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          size: 20,
+                          color: selected ? AccentColor : Colors.white38,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                opt.label,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w300,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              if (opt.subtitle.isNotEmpty)
+                                Text(
+                                  opt.subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                WpButton(
+                  label: 'cancel',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

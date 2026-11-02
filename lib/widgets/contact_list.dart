@@ -42,12 +42,19 @@ class ContactListState extends State<ContactList> {
   @override
   void didUpdateWidget(ContactList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If the settings object itself was swapped, rebind the listener
-    // and rebuild with the current value.
+    // Rebind listener if the Settings instance was swapped.
     if (oldWidget.settings != widget.settings) {
       oldWidget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
       _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
       widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+      _rebuild();
+      return;
+    }
+    // Rebuild entries when the contacts list itself changes — otherwise
+    // filtered results from a fresh fetch would never replace the old
+    // entries built in initState.
+    if (!identical(oldWidget.contacts, widget.contacts) ||
+        !identical(oldWidget.meContact, widget.meContact)) {
       _rebuild();
     }
   }
