@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
@@ -15,10 +16,11 @@ import 'transitions/wp_phone_transition.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settings = await Settings.load();
-  // Fetch MetroV accent before first frame. Null if MetroV not installed
-  // or permission not granted; in that case the user's selection (or the
-  // fallback) is used.
   MetrovAccent = await MetrovThemeService.getAccentColor();
+  debugPrint(
+    '[MetroV] startup accent = '
+        '${MetrovAccent == null ? "null" : "#${MetrovAccent!.value.toRadixString(16).padLeft(8, '0').toUpperCase()}"}',
+  );
   runApp(MyApp(appSettings: settings));
 }
 
@@ -32,10 +34,11 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _recomputeAccent();
     widget.appSettings.selectedAccentArgb.addListener(_onAccentChanged);
     widget.appSettings.useLauncherAccent.addListener(_onAccentChanged);
@@ -43,10 +46,31 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.appSettings.selectedAccentArgb.removeListener(_onAccentChanged);
     widget.appSettings.useLauncherAccent.removeListener(_onAccentChanged);
     widget.appSettings.dispose();
     super.dispose();
+  }
+
+  /// Re-fetch MetroV's accent whenever the app returns to foreground.
+  /// Covers the "user changed their accent in MetroV, comes back to
+  /// People" flow without requiring a restart.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshMetrovAccent();
+    }
+  }
+
+  Future<void> _refreshMetrovAccent() async {
+    final fresh = await MetrovThemeService.getAccentColor();
+    // Nothing changed — don't trigger a rebuild.
+    if (fresh?.value == MetrovAccent?.value) return;
+    if (fresh == null && MetrovAccent == null) return;
+    MetrovAccent = fresh;
+    if (!mounted) return;
+    setState(_recomputeAccent);
   }
 
   void _onAccentChanged() {
@@ -56,11 +80,18 @@ class _MyAppState extends State<MyApp> {
   void _recomputeAccent() {
     final useLauncher = widget.appSettings.useLauncherAccent.value;
     final metroV = MetrovAccent;
+    final selected = Color(widget.appSettings.selectedAccentArgb.value);
     if (useLauncher && metroV != null) {
       AccentColor = metroV;
     } else {
-      AccentColor = Color(widget.appSettings.selectedAccentArgb.value);
+      AccentColor = selected;
     }
+    debugPrint(
+      '[accent] useLauncher=$useLauncher '
+          'metroV=${metroV == null ? "null" : "#${metroV.value.toRadixString(16).padLeft(8, '0').toUpperCase()}"} '
+          'selected=#${selected.value.toRadixString(16).padLeft(8, '0').toUpperCase()} '
+          '-> effective=#${AccentColor.value.toRadixString(16).padLeft(8, '0').toUpperCase()}',
+    );
   }
 
   @override
@@ -106,7 +137,7 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 5,
+        incomingMaxIndex: 10,
       ).routeDuration(),
     );
 

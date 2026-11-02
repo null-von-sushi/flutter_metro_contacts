@@ -275,6 +275,9 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  String _hexOf(Color c) =>
+      '#${c.value.toRadixString(16).padLeft(8, '0').toUpperCase()}';
+
   @override
   Widget build(BuildContext context) {
     final route = ModalRoute.of(context);
@@ -291,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
         .firstWhere(
           (e) => e.value == selectedArgb,
       orElse: () => MapEntry(
-        'custom (#${selectedArgb.toRadixString(16).padLeft(8, '0').toUpperCase()})',
+        'custom (${_hexOf(Color(selectedArgb))})',
         selectedArgb,
       ),
     )
@@ -348,7 +351,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
-                        // ── SHOWING ─────────────────────────────────
                         const FeatherLayer(
                           index: 1,
                           child: Padding(
@@ -385,7 +387,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ── CONTACT DISPLAY ─────────────────────────
                         const FeatherLayer(
                           index: 4,
                           child: Padding(
@@ -424,7 +425,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ── THEMING ─────────────────────────────────
                         const FeatherLayer(
                           index: 6,
                           child: Padding(
@@ -459,7 +459,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ),
-                        // Accent colour row — tap to pick from the WP palette.
+                        // Accent colour picker — tap to choose from the WP palette.
                         FeatherLayer(
                           index: 8,
                           child: _FilterRow(
@@ -469,24 +469,64 @@ class _SettingsPageState extends State<SettingsPage> {
                             onTap: _pickAccentColor,
                           ),
                         ),
-                        // Use launcher accent — only when MetroV launcher
-                        // is installed.
+                        // Use launcher accent — only when MetroV is installed.
                         if (_metroVLauncherInstalled == true)
                           FeatherLayer(
                             index: 9,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16.0, vertical: 8.0),
-                              child: ValueListenableBuilder<bool>(
-                                valueListenable:
-                                widget.settings.useLauncherAccent,
-                                builder: (context, value, _) => WpToggleSwitch(
-                                  header: 'Use MetroV launcher accent',
-                                  value: value,
-                                  accentColor: AccentColor,
-                                  onChanged: (v) => widget
-                                      .settings.useLauncherAccent.value = v,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ValueListenableBuilder<bool>(
+                                    valueListenable:
+                                    widget.settings.useLauncherAccent,
+                                    builder: (context, value, _) =>
+                                        WpToggleSwitch(
+                                          header: 'Use MetroV launcher accent',
+                                          value: value,
+                                          accentColor: AccentColor,
+                                          onChanged: (v) => widget
+                                              .settings.useLauncherAccent.value = v,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Diagnostic row: shows the value the app
+                                  // actually read from MetroV. If this is
+                                  // black/transparent while MetroV itself is
+                                  // colored, the query is the problem — not
+                                  // the toggle.
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 16,
+                                        height: 16,
+                                        decoration: BoxDecoration(
+                                          color: MetrovAccent ??
+                                              Colors.transparent,
+                                          border: Border.all(
+                                            color: Colors.white24,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          MetrovAccent == null
+                                              ? 'launcher accent: not read'
+                                              : 'launcher accent: '
+                                              '${_hexOf(MetrovAccent!)}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w300,
+                                            color: Colors.white54,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ),
