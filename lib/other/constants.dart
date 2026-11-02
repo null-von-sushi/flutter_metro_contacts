@@ -59,3 +59,12 @@ class MessagingAccountTypes {
     'favou*rite\scolou*r:\s*.{1,10}',
   ];
 }
+
+class AppColors {
+  static const Map<int, List<String>> colorValueToNames = {
+    0xFFA20025: ['crimson'],
+    0xFFAA00FF: ['violet', 'purple', '紫色'],
+    0xFFE51400: ['red', '紅色'],
+    0xFFF472D0: ['pink', '粉紅色', '紅色'],
+  };
+}
