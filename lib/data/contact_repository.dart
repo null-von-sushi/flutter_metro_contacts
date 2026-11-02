@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import '../other/constants.dart';
 import 'class_contact.dart';
@@ -44,7 +45,7 @@ class ContactRepository {
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
-      // ── Messenger detection: account type OR phone label ──────────
+      // ── Messenger detection: account type OR phone label OR URL ──
       final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
           .map((rc) => rc.account?.type)
           .whereType<String>()
@@ -70,6 +71,10 @@ class ContactRepository {
       final hasWeChat = weChatId != null ||
           accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
 
+      // ── Notes + derived favorite color ──
+      final notes = _mapNotes(c);
+      final accentColor = _extractFavoriteColor(notes);
+
       final contact = Contact(
         id: c.id ?? '',
         name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
@@ -81,7 +86,8 @@ class ContactRepository {
         phones: _mapPhones(c),
         emails: _mapEmails(c),
         addresses: _mapAddresses(c),
-        notes: _mapNotes(c),
+        notes: notes,
+        accentColor: accentColor,
         birthday: _extractBirthday(c),
         hasTelegram: hasTelegram,
         hasSignal: hasSignal,
@@ -117,15 +123,17 @@ class ContactRepository {
     return (contacts: otherContacts, meContact: meContact);
   }
 
+  // ── Messenger ID detection ──────────────────────────────────────────
+
   /// Finds the best available identifier for a messenger, checking URLs
   /// (Website + IMPP) first, then phone labels. Returns null if none found.
   String? _findMessengerId(dynamic c, List<String> labels) {
     return _findIdFromUrls(c, labels) ?? _findIdFromPhoneLabels(c, labels);
   }
 
-  /// Checks every URL on the contact (from Website.url and SocialMedia.userName)
-  /// against [labels] as case-insensitive prefixes. Returns the extracted
-  /// handle from the first match, or null if none match.
+  /// Checks every URL on the contact (from Website.url and
+  /// SocialMedia.userName) against [labels] as case-insensitive prefixes.
+  /// Returns the extracted handle from the first match, or null.
   String? _findIdFromUrls(dynamic c, List<String> labels) {
     final urls = <String>[];
     try {
@@ -210,6 +218,59 @@ class ContactRepository {
 
     // 6. Give up — return the whole URL so the user can see what we got.
     return url;
+  }
+
+  // ── Favorite color extraction ───────────────────────────────────────
+
+  /// Scans each note for a "favorite colour" phrase and resolves the
+  /// captured text to a [Color]. Returns the first successful match, or
+  /// null if nothing recognisable was found.
+  Color? _extractFavoriteColor(List<String> notes) {
+    for (final note in notes) {
+      for (final patternStr in FavoriteColorDetection.patterns) {
+        final regex = RegExp(
+          patternStr,
+          caseSensitive: false,
+          multiLine: true,
+        );
+        final match = regex.firstMatch(note);
+        if (match == null) continue;
+        final raw = match.group(1);
+        if (raw == null || raw.isEmpty) continue;
+        final color = _resolveColorFromText(raw);
+        if (color != null) return color;
+      }
+    }
+    return null;
+  }
+
+  /// Resolves a raw captured string (e.g. "#1212FF", "red", "紫色") to a
+  /// [Color]. Tries hex first, then named colours.
+  Color? _resolveColorFromText(String text) {
+    // 1. Hex code (#RRGGBB or #AARRGGBB).
+    final hexMatch =
+    RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b').firstMatch(text);
+    if (hexMatch != null) {
+      final hex = hexMatch.group(1)!;
+      final padded = hex.length == 6 ? 'FF$hex' : hex;
+      return Color(int.parse(padded, radix: 16));
+    }
+
+    // 2. Named colour. Build the pattern dynamically from the map keys so
+    //    adding a new language to `colorMap` automatically makes its
+    //    entries matchable here.
+    final sortedKeys = FavoriteColorDetection.colorMap.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final pattern = sortedKeys.map(RegExp.escape).join('|');
+    final namedMatch =
+    RegExp(pattern, caseSensitive: false).firstMatch(text);
+    if (namedMatch != null) {
+      final key = namedMatch.group(0)!.toLowerCase();
+      final hex = FavoriteColorDetection.colorMap[key];
+      if (hex != null) return Color(hex);
+    }
+
+    return null;
   }
 
   // ── Phones / Emails / Addresses / Notes ─────────────────────────────

@@ -283,6 +283,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final c = widget.contact;
+    final accent = c.accentColor ?? AccentColor; // ← derived accent
     final maxIndex = c.detailsMaxIndex;
     final isBirthdayToday = c.isBirthdayToday;
 
@@ -305,6 +306,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Call ${p.header} number',
           value: p.number,
+          accentColor: accent,
           onTap: () => _callNumber(p.number),
         ),
       ));
@@ -313,6 +315,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Text ${p.header} number',
           value: p.number,
+          accentColor: accent,
           onTap: () => _sendSms(p.number),
         ),
       ));
@@ -326,6 +329,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Contact via Signal',
           value: id,
+          accentColor: accent,
           onTap: () => _openSignal(id),
         ),
       ));
@@ -339,12 +343,12 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Contact via Telegram',
           value: id,
+          accentColor: accent,
           onTap: () => _openTelegram(id),
         ),
       ));
     }
 
-    // WeChat (copy-only, no reliable deep link)
     // WeChat (copy + open — no reliable deep link, so we do best-effort)
     if (c.hasWeChat && (c.weChatId != null || c.phones.isNotEmpty)) {
       final id = c.weChatId ?? c.phones.first.number;
@@ -353,6 +357,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Copy WeChat ID',
           value: id,
+          accentColor: accent,
           onTap: () => _copyAndOpenWeChat(id),
         ),
       ));
@@ -366,6 +371,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: header,
           value: e.address,
+          accentColor: accent,
           onTap: () => _sendEmail(e.address),
         ),
       ));
@@ -381,6 +387,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: header,
           value: a.formatted,
+          accentColor: accent,
           onTap: () => _openAddress(a.formatted),
         ),
       ));
@@ -392,6 +399,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Birthday',
           value: _formatBirthday(c.birthday!),
+          accentColor: accent,
         ),
       ));
     }
@@ -402,6 +410,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         child: _InfoSection(
           header: 'Notes',
           value: c.notes.join('\n\n'),
+          accentColor: accent,
         ),
       ));
     }
@@ -470,7 +479,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                                 const SizedBox(width: 8),
                                 Icon(
                                   Icons.cake_outlined,
-                                  color: AccentColor,
+                                  color: accent, // ← derived accent
                                   size: 26,
                                   semanticLabel: 'Birthday today',
                                 ),
@@ -488,6 +497,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                       child: _ProfilePhoto(
                         name: c.name,
                         photo: _fullPhoto ?? c.photo,
+                        color: accent, // ← derived accent
                       ),
                     ),
                   ),
@@ -528,11 +538,17 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 class _ProfilePhoto extends StatelessWidget {
   final String name;
   final Uint8List? photo;
+  final Color? color; // ← new
 
-  const _ProfilePhoto({required this.name, required this.photo});
+  const _ProfilePhoto({
+    required this.name,
+    required this.photo,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final accent = color ?? AccentColor;
     final letter = name.isNotEmpty ? name[0].toUpperCase() : '#';
 
     return Align(
@@ -541,7 +557,7 @@ class _ProfilePhoto extends StatelessWidget {
         width: 160,
         height: 160,
         clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(color: AccentColor),
+        decoration: BoxDecoration(color: accent),
         child: photo != null
             ? Image.memory(
           photo!,
@@ -581,22 +597,25 @@ class _InfoSection extends StatelessWidget {
   final String header;
   final String value;
   final VoidCallback? onTap;
+  final Color? accentColor; // ← new
 
   const _InfoSection({
     required this.header,
     required this.value,
     this.onTap,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final accent = accentColor ?? AccentColor;
     final content = Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-          wpLowercase(header), // ← single point of application,
+            wpLowercase(header),
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.w500,
@@ -609,7 +628,7 @@ class _InfoSection extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w300,
-              color: AccentColor,
+              color: accent, // ← derived accent
             ),
           ),
         ],
