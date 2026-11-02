@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:url_launcher/url_launcher.dart';
 import 'data/class_contact.dart';
+import 'data/contact_repository.dart';
 import 'other/accent_color.dart';
+import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
@@ -14,10 +16,12 @@ import 'other/wp_text.dart';
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
   final VoidCallback? onPopStart;
+  final Settings settings;
 
   const ContactDetailsPage({
     super.key,
     required this.contact,
+    required this.settings,
     this.onPopStart,
   });
 
@@ -26,12 +30,17 @@ class ContactDetailsPage extends StatefulWidget {
 }
 
 class _ContactDetailsPageState extends State<ContactDetailsPage> {
+  final _repository = ContactRepository();
+
   Uint8List? _fullPhoto;
+
+  Contact? _fullContact;
 
   @override
   void initState() {
     super.initState();
     _loadFullPhoto();
+    _loadFullContact();
   }
 
   Future<void> _loadFullPhoto() async {
@@ -44,6 +53,31 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       if (bytes != null && bytes.isNotEmpty && mounted) {
         setState(() => _fullPhoto = bytes);
       }
+    } catch (_) {}
+  }
+
+  Future<void> _loadFullContact() async {
+    try {
+      final full = await FlutterContacts.get(
+        widget.contact.id,
+        properties: {
+          ContactProperty.name,
+          ContactProperty.photoThumbnail,
+          ContactProperty.phone,
+          ContactProperty.email,
+          ContactProperty.address,
+          ContactProperty.note,
+          ContactProperty.event,
+          ContactProperty.identifiers,
+          ContactProperty.website,
+          ContactProperty.socialMedia,
+        },
+      );
+      if (full == null) return;
+      if (!mounted) return;
+      setState(() {
+        _fullContact = _repository.mapSingleContact(full);
+      });
     } catch (_) {}
   }
 
@@ -106,7 +140,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     HapticFeedback.lightImpact();
     await Clipboard.setData(ClipboardData(text: identifier));
 
-    // Try to open WeChat
     bool opened = false;
     try {
       opened = await launchUrl(
@@ -117,10 +150,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
     if (!mounted) return;
 
-    // Determine the message based on whether WeChat opened successfully
-    final String message = opened
-        ? 'Copied — switching to WeChat'
-        : 'Copied';
+    final String message = opened ? 'Copied — switching to WeChat' : 'Copied';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -129,7 +159,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           message,
           style: const TextStyle(color: Colors.white),
         ),
-        duration: const Duration(seconds: 4), // Slightly longer to give time to read
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -158,8 +188,26 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _showError('No maps app found');
   }
 
-  /// Returns true if [identifier] plausibly looks like a phone number
-  /// (contains enough digits to be a real number rather than a username).
+  /// Opens a contact's website URL in the default browser. If the URL
+  /// lacks a scheme (e.g. "example.com"), prepend `https://` so the
+  /// browser handles it correctly.
+  void _openWebsite(String rawUrl) {
+    var target = rawUrl.trim();
+    if (target.isEmpty) {
+      _showError('Empty URL');
+      return;
+    }
+    if (!target.contains('://')) {
+      target = 'https://$target';
+    }
+    final uri = Uri.tryParse(target);
+    if (uri == null) {
+      _showError('Invalid URL');
+      return;
+    }
+    _launchUri(uri, 'No browser found');
+  }
+
   bool _looksLikePhone(String identifier) {
     final digits = identifier.replaceAll(RegExp(r'[^\d]'), '');
     return digits.length >= 6;
@@ -194,7 +242,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(uri, 'Telegram not installed');
   }
 
-  // ── Existing dialogs ──────────────────────────────────────────────
+  // ── Dialogs ──────────────────────────────────────────────────────
 
   void _handleEdit() {
     showDialog(
@@ -282,8 +330,11 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.contact;
-    final accent = c.accentColor ?? AccentColor; // ← derived accent
+    final c = _fullContact ?? widget.contact;
+    final accent = (widget.settings.parseNotesForAccentColor.value
+        ? c.accentColor
+        : null) ??
+        AccentColor;
     final maxIndex = c.detailsMaxIndex;
     final isBirthdayToday = c.isBirthdayToday;
 
@@ -299,7 +350,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
     final infoSections = <Widget>[];
 
-    // Phones: two sections each, "Call X" and "Text X".
     for (final p in c.phones) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -321,7 +371,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Signal
     if (c.hasSignal && (c.signalId != null || c.phones.isNotEmpty)) {
       final id = c.signalId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
@@ -335,7 +384,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Telegram
     if (c.hasTelegram && (c.telegramId != null || c.phones.isNotEmpty)) {
       final id = c.telegramId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
@@ -349,7 +397,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // WeChat (copy + open — no reliable deep link, so we do best-effort)
     if (c.hasWeChat && (c.weChatId != null || c.phones.isNotEmpty)) {
       final id = c.weChatId ?? c.phones.first.number;
       infoSections.add(FeatherLayer(
@@ -363,7 +410,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Emails: "Email" if unlabeled, "Email Home"/"Email Work" otherwise.
     for (final e in c.emails) {
       final header = e.header == 'Email' ? 'Email' : 'Email ${e.header}';
       infoSections.add(FeatherLayer(
@@ -377,7 +423,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Addresses: "Show on Map" if unlabeled, "Show Home on Map" otherwise.
     for (final a in c.addresses) {
       final header = a.header == 'Address'
           ? 'Show on Map'
@@ -389,6 +434,19 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           value: a.formatted,
           accentColor: accent,
           onTap: () => _openAddress(a.formatted),
+        ),
+      ));
+    }
+
+    // Non-messenger website URLs, shown as tappable "open website" rows.
+    for (final url in c.websites) {
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Open website',
+          value: url,
+          accentColor: accent,
+          onTap: () => _openWebsite(url),
         ),
       ));
     }
@@ -479,7 +537,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                                 const SizedBox(width: 8),
                                 Icon(
                                   Icons.cake_outlined,
-                                  color: accent, // ← derived accent
+                                  color: accent,
                                   size: 26,
                                   semanticLabel: 'Birthday today',
                                 ),
@@ -497,7 +555,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                       child: _ProfilePhoto(
                         name: c.name,
                         photo: _fullPhoto ?? c.photo,
-                        color: accent, // ← derived accent
+                        color: accent,
                       ),
                     ),
                   ),
@@ -538,7 +596,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 class _ProfilePhoto extends StatelessWidget {
   final String name;
   final Uint8List? photo;
-  final Color? color; // ← new
+  final Color? color;
 
   const _ProfilePhoto({
     required this.name,
@@ -597,7 +655,7 @@ class _InfoSection extends StatelessWidget {
   final String header;
   final String value;
   final VoidCallback? onTap;
-  final Color? accentColor; // ← new
+  final Color? accentColor;
 
   const _InfoSection({
     required this.header,
@@ -625,10 +683,11 @@ class _InfoSection extends StatelessWidget {
           const SizedBox(height: 0),
           Text(
             value,
+            softWrap: true,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w300,
-              color: accent, // ← derived accent
+              color: accent,
             ),
           ),
         ],

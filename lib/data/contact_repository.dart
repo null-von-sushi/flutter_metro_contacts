@@ -7,7 +7,15 @@ import 'class_contact.dart';
 const int _noYearSentinel = 1804;
 
 class ContactRepository {
-  Future<({List<Contact> contacts, Contact? meContact})> fetchContacts() async {
+  /// Stable identifier for an Android account.
+  static String accountKey(Account a) {
+    return '${a.type ?? ''}|${a.name ?? ''}';
+  }
+
+  Future<({List<Contact> contacts, Contact? meContact})> fetchContacts({
+    String? accountId,
+    String? groupId,
+  }) async {
     if (kDebugMode) {
       await Future.delayed(const Duration(seconds: 5));
     }
@@ -20,7 +28,28 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
+    Account? account;
+    if (accountId != null) {
+      try {
+        final accounts = await FlutterContacts.accounts.getAll();
+        for (final raw in accounts) {
+          final a = raw as Account?;
+          if (a != null && accountKey(a) == accountId) {
+            account = a;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    ContactFilter? filter;
+    if (account != null && groupId != null) {
+      filter = ContactFilter.group(groupId);
+    }
+
     final fetchedContacts = await FlutterContacts.getAll(
+      account: account,
+      filter: filter,
       properties: {
         ContactProperty.name,
         ContactProperty.photoThumbnail,
@@ -40,64 +69,8 @@ class ContactRepository {
     String? meId;
 
     for (final c in fetchedContacts) {
-      final name = c.displayName;
-      final nickname = c.name?.nickname;
-      final isMe =
-          nickname != null && meStrings.contains(nickname.trim().toLowerCase());
-
-      // ── Messenger detection: account type OR phone label OR URL ──
-      final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
-          .map((rc) => rc.account?.type)
-          .whereType<String>()
-          .toList();
-
-      final signalId = _findMessengerId(
-        c,
-        MessagingAccountTypes.signalMessengerLabels,
-      );
-      final telegramId = _findMessengerId(
-        c,
-        MessagingAccountTypes.telegramMessengerLabels,
-      );
-      final weChatId = _findMessengerId(
-        c,
-        MessagingAccountTypes.weChatMessengerLabels,
-      );
-
-      final hasSignal = signalId != null ||
-          accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
-      final hasTelegram = telegramId != null ||
-          accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
-      final hasWeChat = weChatId != null ||
-          accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
-
-      // ── Notes + derived favorite color ──
-      final notes = _mapNotes(c);
-      final accentColor = _extractFavoriteColor(notes);
-
-      final contact = Contact(
-        id: c.id ?? '',
-        name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
-        nickname: nickname,
-        status: ' ',
-        photo: c.photo?.thumbnail,
-        photoFull: null,
-        isMe: isMe,
-        phones: _mapPhones(c),
-        emails: _mapEmails(c),
-        addresses: _mapAddresses(c),
-        notes: notes,
-        accentColor: accentColor,
-        birthday: _extractBirthday(c),
-        hasTelegram: hasTelegram,
-        hasSignal: hasSignal,
-        hasWeChat: hasWeChat,
-        signalId: signalId,
-        telegramId: telegramId,
-        weChatId: weChatId,
-      );
-
-      if (isMe) {
+      final contact = mapSingleContact(c);
+      if (contact.isMe) {
         if (meContact == null) {
           meContact = contact;
           meId = c.id;
@@ -123,17 +96,71 @@ class ContactRepository {
     return (contacts: otherContacts, meContact: meContact);
   }
 
+  /// Maps a single plugin `Contact` to this app's `Contact` model.
+  Contact mapSingleContact(dynamic c) {
+    final name = c.displayName;
+    final nickname = c.name?.nickname;
+    final isMe =
+        nickname != null && meStrings.contains(nickname.trim().toLowerCase());
+
+    final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
+        .map((rc) => rc.account?.type)
+        .whereType<String>()
+        .toList();
+
+    final signalId = _findMessengerId(
+      c,
+      MessagingAccountTypes.signalMessengerLabels,
+    );
+    final telegramId = _findMessengerId(
+      c,
+      MessagingAccountTypes.telegramMessengerLabels,
+    );
+    final weChatId = _findMessengerId(
+      c,
+      MessagingAccountTypes.weChatMessengerLabels,
+    );
+
+    final hasSignal = signalId != null ||
+        accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
+    final hasTelegram = telegramId != null ||
+        accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
+    final hasWeChat = weChatId != null ||
+        accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
+
+    final notes = _mapNotes(c);
+    final accentColor = _extractFavoriteColor(notes);
+
+    return Contact(
+      id: c.id ?? '',
+      name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
+      nickname: nickname,
+      status: ' ',
+      photo: c.photo?.thumbnail,
+      photoFull: null,
+      isMe: isMe,
+      phones: _mapPhones(c),
+      emails: _mapEmails(c),
+      addresses: _mapAddresses(c),
+      notes: notes,
+      accentColor: accentColor,
+      birthday: _extractBirthday(c),
+      hasTelegram: hasTelegram,
+      hasSignal: hasSignal,
+      hasWeChat: hasWeChat,
+      signalId: signalId,
+      telegramId: telegramId,
+      weChatId: weChatId,
+      websites: _mapWebsites(c),
+    );
+  }
+
   // ── Messenger ID detection ──────────────────────────────────────────
 
-  /// Finds the best available identifier for a messenger, checking URLs
-  /// (Website + IMPP) first, then phone labels. Returns null if none found.
   String? _findMessengerId(dynamic c, List<String> labels) {
     return _findIdFromUrls(c, labels) ?? _findIdFromPhoneLabels(c, labels);
   }
 
-  /// Checks every URL on the contact (from Website.url and
-  /// SocialMedia.userName) against [labels] as case-insensitive prefixes.
-  /// Returns the extracted handle from the first match, or null.
   String? _findIdFromUrls(dynamic c, List<String> labels) {
     final urls = <String>[];
     try {
@@ -160,8 +187,6 @@ class ContactRepository {
     return null;
   }
 
-  /// Checks each phone's resolved header against [labels]. Returns the
-  /// phone number of the first matching phone, or null.
   String? _findIdFromPhoneLabels(dynamic c, List<String> labels) {
     try {
       for (final p in (c.phones as List)) {
@@ -175,19 +200,10 @@ class ContactRepository {
     return null;
   }
 
-  /// Extracts the human-meaningful handle from a URL that was already
-  /// confirmed to start with [prefix]. Order of preference:
-  ///   query param (?username=, ?user=, ?id=, ?phone=)
-  ///   bare query (?johndoe)
-  ///   fragment last segment (#p/+441234567890)
-  ///   path last segment (/user/johndoe)
-  ///   host (fallback)
-  ///   full URL (last resort)
   String _extractHandleFromUrl(String url, String prefix) {
     final uri = Uri.tryParse(url);
     if (uri == null) return url;
 
-    // 1. Named query parameter.
     if (uri.queryParameters.isNotEmpty) {
       final known = uri.queryParameters['username'] ??
           uri.queryParameters['user'] ??
@@ -195,44 +211,50 @@ class ContactRepository {
           uri.queryParameters['phone'];
       if (known != null && known.isNotEmpty) return known;
     }
-
-    // 2. Bare query with no '=' (e.g. weixin://dl/chat?johndoe).
     if (uri.query.isNotEmpty && !uri.query.contains('=')) {
       return uri.query;
     }
-
-    // 3. Fragment last segment (e.g. signal.me/#p/+441234567890).
     if (uri.fragment.isNotEmpty) {
       final frag = uri.fragment;
       return frag.contains('/') ? frag.split('/').last : frag;
     }
-
-    // 4. Path last segment.
     if (uri.pathSegments.isNotEmpty) {
       final last = uri.pathSegments.last;
       if (last.isNotEmpty) return last;
     }
-
-    // 5. Host.
     if (uri.host.isNotEmpty) return uri.host;
-
-    // 6. Give up — return the whole URL so the user can see what we got.
     return url;
+  }
+
+  /// Collects URLs from a contact that don't match any messenger label.
+  /// These are the ones shown as "open website" rows in the details page.
+  List<String> _mapWebsites(dynamic c) {
+    final messengerLabels = <String>[
+      ...MessagingAccountTypes.signalMessengerLabels,
+      ...MessagingAccountTypes.telegramMessengerLabels,
+      ...MessagingAccountTypes.weChatMessengerLabels,
+    ];
+
+    final result = <String>[];
+    try {
+      for (final w in (c.websites as List? ?? [])) {
+        final url = ((w.url as String?) ?? '').trim();
+        if (url.isEmpty) continue;
+        final lower = url.toLowerCase();
+        final isMessenger = messengerLabels
+            .any((label) => lower.startsWith(label.toLowerCase()));
+        if (!isMessenger) result.add(url);
+      }
+    } catch (_) {}
+    return result;
   }
 
   // ── Favorite color extraction ───────────────────────────────────────
 
-  /// Scans each note for a "favorite colour" phrase and resolves the
-  /// captured text to a [Color]. Returns the first successful match, or
-  /// null if nothing recognisable was found.
   Color? _extractFavoriteColor(List<String> notes) {
     for (final note in notes) {
       for (final patternStr in FavoriteColorDetection.patterns) {
-        final regex = RegExp(
-          patternStr,
-          caseSensitive: false,
-          multiLine: true,
-        );
+        final regex = RegExp(patternStr, caseSensitive: false, multiLine: true);
         final match = regex.firstMatch(note);
         if (match == null) continue;
         final raw = match.group(1);
@@ -244,10 +266,7 @@ class ContactRepository {
     return null;
   }
 
-  /// Resolves a raw captured string (e.g. "#1212FF", "red", "紫色") to a
-  /// [Color]. Tries hex first, then named colours.
   Color? _resolveColorFromText(String text) {
-    // 1. Hex code (#RRGGBB or #AARRGGBB).
     final hexMatch =
     RegExp(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b').firstMatch(text);
     if (hexMatch != null) {
@@ -256,9 +275,6 @@ class ContactRepository {
       return Color(int.parse(padded, radix: 16));
     }
 
-    // 2. Named colour. Build the pattern dynamically from the map keys so
-    //    adding a new language to `colorMap` automatically makes its
-    //    entries matchable here.
     final sortedKeys = FavoriteColorDetection.colorMap.keys.toList()
       ..sort((a, b) => b.length.compareTo(a.length));
     final pattern = sortedKeys.map(RegExp.escape).join('|');
@@ -269,7 +285,6 @@ class ContactRepository {
       final hex = FavoriteColorDetection.colorMap[key];
       if (hex != null) return Color(hex);
     }
-
     return null;
   }
 
@@ -412,7 +427,6 @@ class ContactRepository {
         return DateTime(_noYearSentinel, m, d);
       }
     }
-
     return null;
   }
 
@@ -468,20 +482,17 @@ class ContactRepository {
 
   String _headerFor(dynamic item, {required String fallback}) {
     final labelObj = _tryRead(item, 'label');
-
     final custom = _tryReadString(labelObj, 'customLabel') ??
         _tryReadString(item, 'customLabel');
     if (custom != null && custom.isNotEmpty) {
       return custom;
     }
-
     final standard = _labelDisplayName(labelObj);
     if (standard != null &&
         standard.isNotEmpty &&
         standard.toLowerCase() != 'custom') {
       return _capitalizeFirst(standard);
     }
-
     return fallback;
   }
 
@@ -496,7 +507,6 @@ class ContactRepository {
         if (n != null && n.isNotEmpty) return n;
       }
     } catch (_) {}
-
     try {
       final n = (labelObj as dynamic).name;
       if (n is String && n.isNotEmpty) return n;
@@ -508,7 +518,6 @@ class ContactRepository {
 
     final parts = s.split('.');
     if (parts.length > 1) return parts.last;
-
     return null;
   }
 

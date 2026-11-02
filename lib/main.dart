@@ -1,22 +1,98 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:wp_pivot_flutter/wp_components.dart';
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
-import 'contact_details.dart'; // <-- Imported the new page
+import 'contact_details.dart';
 import 'data/class_contact.dart';
 import 'other/accent_color.dart';
+import 'other/settings.dart';
 import 'data/contact_repository.dart';
+import 'services/metrov_theme_service.dart';
 import 'transitions/wp_phone_transition.dart';
 
-void main() => runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final settings = await Settings.load();
+  MetrovAccent = await MetrovThemeService.getAccentColor();
+  debugPrint(
+    '[MetroV] startup accent = '
+        '${MetrovAccent == null ? "null" : "#${MetrovAccent!.value.toRadixString(16).padLeft(8, '0').toUpperCase()}"}',
+  );
+  runApp(MyApp(appSettings: settings));
+}
 
-/// Layers on PeoplePage: pivot=0, bottom bar=1.
 const int _homeMaxIndex = 1;
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  final Settings appSettings;
+  const MyApp({super.key, required this.appSettings});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _recomputeAccent();
+    widget.appSettings.selectedAccentArgb.addListener(_onAccentChanged);
+    widget.appSettings.useLauncherAccent.addListener(_onAccentChanged);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.appSettings.selectedAccentArgb.removeListener(_onAccentChanged);
+    widget.appSettings.useLauncherAccent.removeListener(_onAccentChanged);
+    widget.appSettings.dispose();
+    super.dispose();
+  }
+
+  /// Re-fetch MetroV's accent whenever the app returns to foreground.
+  /// Covers the "user changed their accent in MetroV, comes back to
+  /// People" flow without requiring a restart.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshMetrovAccent();
+    }
+  }
+
+  Future<void> _refreshMetrovAccent() async {
+    final fresh = await MetrovThemeService.getAccentColor();
+    // Nothing changed — don't trigger a rebuild.
+    if (fresh?.value == MetrovAccent?.value) return;
+    if (fresh == null && MetrovAccent == null) return;
+    MetrovAccent = fresh;
+    if (!mounted) return;
+    setState(_recomputeAccent);
+  }
+
+  void _onAccentChanged() {
+    setState(_recomputeAccent);
+  }
+
+  void _recomputeAccent() {
+    final useLauncher = widget.appSettings.useLauncherAccent.value;
+    final metroV = MetrovAccent;
+    final selected = Color(widget.appSettings.selectedAccentArgb.value);
+    if (useLauncher && metroV != null) {
+      AccentColor = metroV;
+    } else {
+      AccentColor = selected;
+    }
+    debugPrint(
+      '[accent] useLauncher=$useLauncher '
+          'metroV=${metroV == null ? "null" : "#${metroV.value.toRadixString(16).padLeft(8, '0').toUpperCase()}"} '
+          'selected=#${selected.value.toRadixString(16).padLeft(8, '0').toUpperCase()} '
+          '-> effective=#${AccentColor.value.toRadixString(16).padLeft(8, '0').toUpperCase()}',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,16 +106,17 @@ class MyApp extends StatelessWidget {
         pageTransitionsTheme: const PageTransitionsTheme(builders: {}),
       ),
       initialRoute: Navigator.defaultRouteName,
-      onGenerateRoute: (settings) => MaterialPageRoute(
-        settings: settings,
-        builder: (_) => const PeoplePage(),
+      onGenerateRoute: (routeSettings) => MaterialPageRoute(
+        settings: routeSettings,
+        builder: (_) => PeoplePage(settings: widget.appSettings),
       ),
     );
   }
 }
 
 class PeoplePage extends StatefulWidget {
-  const PeoplePage({super.key});
+  final Settings settings;
+  const PeoplePage({super.key, required this.settings});
 
   @override
   State<PeoplePage> createState() => _PeoplePageState();
@@ -48,8 +125,10 @@ class PeoplePage extends StatefulWidget {
 class _PeoplePageState extends State<PeoplePage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _exitController;
-  late Future<({List<Contact> contacts, Contact? meContact})> _contactsFuture;
+  late Future<({List<Contact> contacts, Contact? meContact})> _allPivotFuture;
   final _contactRepository = ContactRepository();
+
+  late final Listenable _filterListenable;
 
   @override
   void initState() {
@@ -58,26 +137,49 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 5,
+        incomingMaxIndex: 10,
       ).routeDuration(),
     );
-    _contactsFuture = _contactRepository.fetchContacts();
+
+    _filterListenable = Listenable.merge([
+      widget.settings.accountFilter,
+      widget.settings.groupFilter,
+    ]);
+    _filterListenable.addListener(_onFilterChanged);
+
+    _allPivotFuture = _fetchFiltered();
   }
 
   @override
   void dispose() {
+    _filterListenable.removeListener(_onFilterChanged);
     _exitController.dispose();
     super.dispose();
+  }
+
+  void _onFilterChanged() {
+    if (!mounted) return;
+    setState(() {
+      _allPivotFuture = _fetchFiltered();
+    });
+  }
+
+  Future<({List<Contact> contacts, Contact? meContact})> _fetchFiltered() {
+    return _contactRepository.fetchContacts(
+      accountId: widget.settings.accountFilter.value,
+      groupId: widget.settings.groupFilter.value,
+    );
   }
 
   void _openSettings() {
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 5, // Settings has layers 0-4 now
+        incomingMaxIndex: 10,
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => SettingsPage(
           onPopStart: _exitController.reverse,
+          settings: widget.settings,
         ),
       ),
     );
@@ -91,6 +193,7 @@ class _PeoplePageState extends State<PeoplePage>
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => ContactDetailsPage(
           contact: contact,
+          settings: widget.settings,
           onPopStart: _exitController.reverse,
         ),
       ),
@@ -125,7 +228,7 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 5,
+        incomingMaxIndex: 10,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,
@@ -141,13 +244,14 @@ class _PeoplePageState extends State<PeoplePage>
               children: [
                 FutureBuilder<
                     ({List<Contact> contacts, Contact? meContact})>(
-                  future: _contactsFuture,
+                  future: _allPivotFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return SizedBox.expand(
                         child: Center(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 48),
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 48),
                             child: SizedBox(
                               width: double.infinity,
                               height: 4,
@@ -170,7 +274,7 @@ class _PeoplePageState extends State<PeoplePage>
                     if (data == null || data.contacts.isEmpty) {
                       return const Center(
                         child: Text(
-                          'No contacts found or permission denied.',
+                          'No contacts match the current filter.',
                           style: TextStyle(color: Colors.white70),
                         ),
                       );
@@ -178,34 +282,40 @@ class _PeoplePageState extends State<PeoplePage>
                     return ContactList(
                       contacts: data.contacts,
                       meContact: data.meContact,
-                      onContactTap: _openDetails, // <-- Wired up here
+                      onContactTap: _openDetails,
+                      settings: widget.settings,
                     );
                   },
                 ),
-                const ContactList(contacts: []),
-                const ContactList(contacts: []),
+                ContactList(contacts: const [], settings: widget.settings),
+                ContactList(contacts: const [], settings: widget.settings),
               ],
             ),
           ),
         ),
-          bottomNavigationBar: FeatherLayer(
-            index: 1,
-            child: WpBottomAppBar(
-              actions: [
-                WpApplicationBarAction(
-                  icon: const Icon(Icons.add, weight: 1000, size: 30, color: Colors.white),
-                  label: 'add',
-                  onPressed: _addNewContact,
+        bottomNavigationBar: FeatherLayer(
+          index: 1,
+          child: WpBottomAppBar(
+            actions: [
+              WpApplicationBarAction(
+                icon: const Icon(
+                  Icons.add,
+                  weight: 1000,
+                  size: 30,
+                  color: Colors.white,
                 ),
-              ],
-              menuItems: [
-                WpApplicationBarMenuItem(
-                  label: 'settings',
-                  onPressed: _openSettings,
-                ),
-              ],
-            ),
+                label: 'add',
+                onPressed: _addNewContact,
+              ),
+            ],
+            menuItems: [
+              WpApplicationBarMenuItem(
+                label: 'settings',
+                onPressed: _openSettings,
+              ),
+            ],
           ),
+        ),
       ),
     );
   }

@@ -38,15 +38,15 @@ class Contact {
   final bool hasSignal;
   final bool hasWeChat;
 
-  // Optional identifiers extracted from a phone label or URL.
-  // null when the contact has the messenger (via account) but no
-  // specific handle was found.
   final String? signalId;
   final String? telegramId;
   final String? weChatId;
 
-  /// Per-contact accent color, derived from a "favorite color" mention
-  /// in the contact's notes. Null means "use the global AccentColor".
+  /// Normal website URLs. URLs that matched a messenger label (Signal,
+  /// Telegram, WeChat) are excluded — those are surfaced as messenger
+  /// sections instead.
+  final List<String> websites;
+
   final Color? accentColor;
 
   const Contact({
@@ -68,6 +68,7 @@ class Contact {
     this.signalId,
     this.telegramId,
     this.weChatId,
+    this.websites = const [],
     this.accentColor,
   });
 
@@ -90,6 +91,7 @@ class Contact {
     String? signalId,
     String? telegramId,
     String? weChatId,
+    List<String>? websites,
     Color? accentColor,
   }) {
     return Contact(
@@ -111,18 +113,25 @@ class Contact {
       signalId: signalId ?? this.signalId,
       telegramId: telegramId ?? this.telegramId,
       weChatId: weChatId ?? this.weChatId,
+      websites: websites ?? this.websites,
       accentColor: accentColor ?? this.accentColor,
     );
   }
 
-  String get displayTitle =>
-      (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
-
-  String get displaySubtitle {
-    if (nickname != null && nickname!.isNotEmpty && nickname != name) {
-      return name;
+  String displayTitle(bool prioritizeNicknames) {
+    if (prioritizeNicknames) {
+      return (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
     }
-    return status;
+    return name;
+  }
+
+  String displaySubtitle(bool prioritizeNicknames) {
+    final hasNickname =
+        nickname != null && nickname!.isNotEmpty && nickname != name;
+    if (prioritizeNicknames) {
+      return hasNickname ? name : status;
+    }
+    return hasNickname ? nickname! : status;
   }
 
   String get detailsTitle {
@@ -141,13 +150,12 @@ class Contact {
   int get detailsMaxIndex {
     int count = 2;
     count += phones.length * 2;
-    // Signal section shows if hasSignal AND we have either a specific
-    // ID or at least one phone to fall back to.
     if (hasSignal && (signalId != null || phones.isNotEmpty)) count += 1;
     if (hasTelegram && (telegramId != null || phones.isNotEmpty)) count += 1;
     if (hasWeChat && (weChatId != null || phones.isNotEmpty)) count += 1;
     count += emails.length;
     count += addresses.length;
+    count += websites.length;
     if (birthday != null) count += 1;
     if (notes.isNotEmpty) count += 1;
     count += 1;

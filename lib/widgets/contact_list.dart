@@ -3,6 +3,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../data/class_contact.dart';
 import '../data/list_entry.dart';
 import '../logic/contact_grouper.dart';
+import '../other/settings.dart';
 import 'contact_widgets.dart';
 import 'letter_grid_overlay.dart';
 
@@ -10,10 +11,12 @@ class ContactList extends StatefulWidget {
   final List<Contact> contacts;
   final Contact? meContact;
   final void Function(Contact)? onContactTap;
+  final Settings settings;
 
   const ContactList({
     super.key,
     required this.contacts,
+    required this.settings,
     this.meContact,
     this.onContactTap,
   });
@@ -24,13 +27,60 @@ class ContactList extends StatefulWidget {
 
 class ContactListState extends State<ContactList> {
   final ItemScrollController _scrollController = ItemScrollController();
-  late final List<ListEntry> _entries;
-  late final Map<String, int> _letterToIndex;
+  late List<ListEntry> _entries;
+  late Map<String, int> _letterToIndex;
+  late bool _prioritizeNicknames;
 
   @override
   void initState() {
     super.initState();
-    final result = groupContacts(widget.contacts, widget.meContact);
+    _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+    _rebuild();
+    widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+  }
+
+  @override
+  void didUpdateWidget(ContactList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Rebind listener if the Settings instance was swapped.
+    if (oldWidget.settings != widget.settings) {
+      oldWidget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+      _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+      widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+      _rebuild();
+      return;
+    }
+    // Rebuild entries when the contacts list itself changes — otherwise
+    // filtered results from a fresh fetch would never replace the old
+    // entries built in initState.
+    if (!identical(oldWidget.contacts, widget.contacts) ||
+        !identical(oldWidget.meContact, widget.meContact)) {
+      _rebuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+    super.dispose();
+  }
+
+  void _onSettingChanged() {
+    final newValue = widget.settings.prioritizeNicknames.value;
+    if (newValue != _prioritizeNicknames) {
+      setState(() {
+        _prioritizeNicknames = newValue;
+        _rebuild();
+      });
+    }
+  }
+
+  void _rebuild() {
+    final result = groupContacts(
+      widget.contacts,
+      widget.meContact,
+      prioritizeNicknames: _prioritizeNicknames,
+    );
     _entries = result.entries;
     _letterToIndex = result.letterToIndex;
   }
@@ -91,6 +141,7 @@ class ContactListState extends State<ContactList> {
         final contact = (entry as ContactEntry).contact;
         return ContactTile(
           contact: contact,
+          prioritizeNicknames: _prioritizeNicknames,
           onTap: () => widget.onContactTap?.call(contact),
         );
       },
