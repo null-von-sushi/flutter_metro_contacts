@@ -12,6 +12,7 @@ import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
 import 'other/wp_text.dart';
+import 'contact_edit_page.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -236,24 +237,23 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(uri, 'Telegram not installed');
   }
 
+
   void _handleEdit() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Edit Contact'),
-        content: const Text('Edit form will go here.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Save', style: TextStyle(color: AccentColor)),
-          ),
-        ],
+    final c = _fullContact ?? widget.contact;
+    Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: 3,
+        outgoingMaxIndex: c.detailsMaxIndex,
+        builder: (_) => ContactEditPage(
+          contact: c,
+          settings: widget.settings,
+          onSaved: () {
+            if (mounted) {
+              setState(() => _fullContact = null);
+              _loadFullContact();
+            }
+          },
+        ),
       ),
     );
   }

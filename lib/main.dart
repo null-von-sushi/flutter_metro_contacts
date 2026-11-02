@@ -12,6 +12,7 @@ import 'other/settings.dart';
 import 'data/contact_repository.dart';
 import 'services/metrov_theme_service.dart';
 import 'transitions/wp_phone_transition.dart';
+import 'contact_edit_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -198,23 +199,20 @@ class _PeoplePageState extends State<PeoplePage>
   }
 
   void _addNewContact() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('New Contact'),
-        content: const Text('Add contact form will go here.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Save', style: TextStyle(color: AccentColor)),
-          ),
-        ],
+    _exitController.forward();
+    Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: 3,
+        outgoingMaxIndex: _homeMaxIndex,
+        builder: (_) => ContactEditPage(
+          settings: widget.settings,
+          onPopStart: _exitController.reverse,
+          onSaved: () {
+            if (mounted) {
+              setState(() => _allPivotFuture = _fetchFiltered());
+            }
+          },
+        ),
       ),
     );
   }
