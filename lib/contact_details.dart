@@ -34,10 +34,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   Uint8List? _fullPhoto;
 
-  /// The fully-aggregated contact, fetched by ID without any account
-  /// filter. If the list was filtered to one account, the `widget.contact`
-  /// we were given only has that account's data — this one has data from
-  /// every linked raw contact.
   Contact? _fullContact;
 
   @override
@@ -60,10 +56,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     } catch (_) {}
   }
 
-  /// Re-fetches the contact by ID with no account/group filter, so that
-  /// phone numbers, emails, addresses, notes, etc. from every linked
-  /// account are shown — even when the list was filtered to a single
-  /// account.
   Future<void> _loadFullContact() async {
     try {
       final full = await FlutterContacts.get(
@@ -196,6 +188,26 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _showError('No maps app found');
   }
 
+  /// Opens a contact's website URL in the default browser. If the URL
+  /// lacks a scheme (e.g. "example.com"), prepend `https://` so the
+  /// browser handles it correctly.
+  void _openWebsite(String rawUrl) {
+    var target = rawUrl.trim();
+    if (target.isEmpty) {
+      _showError('Empty URL');
+      return;
+    }
+    if (!target.contains('://')) {
+      target = 'https://$target';
+    }
+    final uri = Uri.tryParse(target);
+    if (uri == null) {
+      _showError('Invalid URL');
+      return;
+    }
+    _launchUri(uri, 'No browser found');
+  }
+
   bool _looksLikePhone(String identifier) {
     final digits = identifier.replaceAll(RegExp(r'[^\d]'), '');
     return digits.length >= 6;
@@ -318,8 +330,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Prefer the fully-aggregated contact when loaded; fall back to the
-    // (possibly filtered) one we were handed from the list until then.
     final c = _fullContact ?? widget.contact;
     final accent = (widget.settings.parseNotesForAccentColor.value
         ? c.accentColor
@@ -424,6 +434,19 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           value: a.formatted,
           accentColor: accent,
           onTap: () => _openAddress(a.formatted),
+        ),
+      ));
+    }
+
+    // Non-messenger website URLs, shown as tappable "open website" rows.
+    for (final url in c.websites) {
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Open website',
+          value: url,
+          accentColor: accent,
+          onTap: () => _openWebsite(url),
         ),
       ));
     }
@@ -660,6 +683,7 @@ class _InfoSection extends StatelessWidget {
           const SizedBox(height: 0),
           Text(
             value,
+            softWrap: true,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w300,

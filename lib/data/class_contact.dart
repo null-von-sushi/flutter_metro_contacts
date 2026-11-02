@@ -42,6 +42,11 @@ class Contact {
   final String? telegramId;
   final String? weChatId;
 
+  /// Normal website URLs. URLs that matched a messenger label (Signal,
+  /// Telegram, WeChat) are excluded — those are surfaced as messenger
+  /// sections instead.
+  final List<String> websites;
+
   final Color? accentColor;
 
   const Contact({
@@ -63,6 +68,7 @@ class Contact {
     this.signalId,
     this.telegramId,
     this.weChatId,
+    this.websites = const [],
     this.accentColor,
   });
 
@@ -85,6 +91,7 @@ class Contact {
     String? signalId,
     String? telegramId,
     String? weChatId,
+    List<String>? websites,
     Color? accentColor,
   }) {
     return Contact(
@@ -106,13 +113,11 @@ class Contact {
       signalId: signalId ?? this.signalId,
       telegramId: telegramId ?? this.telegramId,
       weChatId: weChatId ?? this.weChatId,
+      websites: websites ?? this.websites,
       accentColor: accentColor ?? this.accentColor,
     );
   }
 
-  /// Title for list views (ContactTile). Respects the "prioritize
-  /// nicknames" toggle: nickname-first when [prioritizeNicknames] is
-  /// true, legal-name-first otherwise.
   String displayTitle(bool prioritizeNicknames) {
     if (prioritizeNicknames) {
       return (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
@@ -120,8 +125,6 @@ class Contact {
     return name;
   }
 
-  /// Subtitle for list views, paired with [displayTitle]. Shows the
-  /// "other" name when one exists, else the status.
   String displaySubtitle(bool prioritizeNicknames) {
     final hasNickname =
         nickname != null && nickname!.isNotEmpty && nickname != name;
@@ -131,8 +134,6 @@ class Contact {
     return hasNickname ? nickname! : status;
   }
 
-  /// Header for the detail page — always shows both name and nickname,
-  /// regardless of the "prioritize nicknames" toggle.
   String get detailsTitle {
     if (nickname != null && nickname!.isNotEmpty && nickname != name) {
       return '$name ($nickname)';
@@ -154,6 +155,7 @@ class Contact {
     if (hasWeChat && (weChatId != null || phones.isNotEmpty)) count += 1;
     count += emails.length;
     count += addresses.length;
+    count += websites.length;
     if (birthday != null) count += 1;
     if (notes.isNotEmpty) count += 1;
     count += 1;

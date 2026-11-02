@@ -8,20 +8,10 @@ const int _noYearSentinel = 1804;
 
 class ContactRepository {
   /// Stable identifier for an Android account.
-  ///
-  /// `Account.id` is unreliable — on many devices it's null or shared
-  /// across multiple accounts. The Contacts Provider identifies accounts
-  /// by the `(account_type, account_name)` pair, so we use that here.
   static String accountKey(Account a) {
     return '${a.type ?? ''}|${a.name ?? ''}';
   }
 
-  /// Fetch contacts, optionally restricted to a single account and/or
-  /// group.
-  ///
-  /// [accountId] is the composite key produced by [accountKey].
-  /// [groupId] is a `Group.id` from `FlutterContacts.groups.getAll()`.
-  /// Both are nullable; null means "no restriction".
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts({
     String? accountId,
     String? groupId,
@@ -107,14 +97,6 @@ class ContactRepository {
   }
 
   /// Maps a single plugin `Contact` to this app's `Contact` model.
-  ///
-  /// The `photoFull` field is left as null — callers that need the
-  /// full-resolution image (the Me tile, the details page) fetch it
-  /// separately via `FlutterContacts.get(id, photoFullRes)`.
-  ///
-  /// This is public so `ContactDetailsPage` can re-fetch the fully-
-  /// aggregated contact by ID (with no account filter) and map it the
-  /// same way the list does.
   Contact mapSingleContact(dynamic c) {
     final name = c.displayName;
     final nickname = c.name?.nickname;
@@ -169,6 +151,7 @@ class ContactRepository {
       signalId: signalId,
       telegramId: telegramId,
       weChatId: weChatId,
+      websites: _mapWebsites(c),
     );
   }
 
@@ -241,6 +224,29 @@ class ContactRepository {
     }
     if (uri.host.isNotEmpty) return uri.host;
     return url;
+  }
+
+  /// Collects URLs from a contact that don't match any messenger label.
+  /// These are the ones shown as "open website" rows in the details page.
+  List<String> _mapWebsites(dynamic c) {
+    final messengerLabels = <String>[
+      ...MessagingAccountTypes.signalMessengerLabels,
+      ...MessagingAccountTypes.telegramMessengerLabels,
+      ...MessagingAccountTypes.weChatMessengerLabels,
+    ];
+
+    final result = <String>[];
+    try {
+      for (final w in (c.websites as List? ?? [])) {
+        final url = ((w.url as String?) ?? '').trim();
+        if (url.isEmpty) continue;
+        final lower = url.toLowerCase();
+        final isMessenger = messengerLabels
+            .any((label) => lower.startsWith(label.toLowerCase()));
+        if (!isMessenger) result.add(url);
+      }
+    } catch (_) {}
+    return result;
   }
 
   // ── Favorite color extraction ───────────────────────────────────────
