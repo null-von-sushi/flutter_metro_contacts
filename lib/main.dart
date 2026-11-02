@@ -11,30 +11,30 @@ import 'other/settings.dart';
 import 'data/contact_repository.dart';
 import 'transitions/wp_phone_transition.dart';
 
-void main() => runApp(const MyApp());
+void main() async {
+  // Required before calling SharedPreferences in Settings.load()
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final settings = await Settings.load();
+  runApp(MyApp(appSettings: settings));
+}
 
 /// Layers on PeoplePage: pivot=0, bottom bar=1.
 const int _homeMaxIndex = 1;
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final Settings appSettings;
+
+  const MyApp({super.key, required this.appSettings});
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  late final Settings _settings;
-
-  @override
-  void initState() {
-    super.initState();
-    _settings = Settings();
-  }
-
   @override
   void dispose() {
-    _settings.dispose();
+    widget.appSettings.dispose();
     super.dispose();
   }
 
@@ -50,9 +50,9 @@ class _MyAppState extends State<MyApp> {
         pageTransitionsTheme: const PageTransitionsTheme(builders: {}),
       ),
       initialRoute: Navigator.defaultRouteName,
-      onGenerateRoute: (settings) => MaterialPageRoute(
-        settings: settings,
-        builder: (_) => PeoplePage(settings: _settings),
+      onGenerateRoute: (routeSettings) => MaterialPageRoute(
+        settings: routeSettings,
+        builder: (_) => PeoplePage(settings: widget.appSettings),
       ),
     );
   }
