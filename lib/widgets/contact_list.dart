@@ -27,13 +27,53 @@ class ContactList extends StatefulWidget {
 
 class ContactListState extends State<ContactList> {
   final ItemScrollController _scrollController = ItemScrollController();
-  late final List<ListEntry> _entries;
-  late final Map<String, int> _letterToIndex;
+  late List<ListEntry> _entries;
+  late Map<String, int> _letterToIndex;
+  late bool _prioritizeNicknames;
 
   @override
   void initState() {
     super.initState();
-    final result = groupContacts(widget.contacts, widget.meContact);
+    _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+    _rebuild();
+    widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+  }
+
+  @override
+  void didUpdateWidget(ContactList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the settings object itself was swapped, rebind the listener
+    // and rebuild with the current value.
+    if (oldWidget.settings != widget.settings) {
+      oldWidget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+      _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+      widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+      _rebuild();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+    super.dispose();
+  }
+
+  void _onSettingChanged() {
+    final newValue = widget.settings.prioritizeNicknames.value;
+    if (newValue != _prioritizeNicknames) {
+      setState(() {
+        _prioritizeNicknames = newValue;
+        _rebuild();
+      });
+    }
+  }
+
+  void _rebuild() {
+    final result = groupContacts(
+      widget.contacts,
+      widget.meContact,
+      prioritizeNicknames: _prioritizeNicknames,
+    );
     _entries = result.entries;
     _letterToIndex = result.letterToIndex;
   }
@@ -64,45 +104,38 @@ class ContactListState extends State<ContactList> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuilds the whole list when the "prioritize nicknames" setting
-    // changes, so titles and subtitles update immediately.
-    return ValueListenableBuilder<bool>(
-      valueListenable: widget.settings.prioritizeNicknames,
-      builder: (context, prioritizeNicknames, _) {
-        if (_entries.isEmpty) {
-          return const Center(
-            child: Text(
-              'No contacts in this category.',
-              style: TextStyle(color: Colors.white54),
-            ),
+    if (_entries.isEmpty) {
+      return const Center(
+        child: Text(
+          'No contacts in this category.',
+          style: TextStyle(color: Colors.white54),
+        ),
+      );
+    }
+
+    return ScrollablePositionedList.builder(
+      itemScrollController: _scrollController,
+      itemCount: _entries.length,
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      itemBuilder: (context, index) {
+        final entry = _entries[index];
+        if (entry is MeEntry) {
+          return MeTile(
+            contact: entry.contact,
+            onTap: () => widget.onContactTap?.call(entry.contact),
           );
         }
-
-        return ScrollablePositionedList.builder(
-          itemScrollController: _scrollController,
-          itemCount: _entries.length,
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          itemBuilder: (context, index) {
-            final entry = _entries[index];
-            if (entry is MeEntry) {
-              return MeTile(
-                contact: entry.contact,
-                onTap: () => widget.onContactTap?.call(entry.contact),
-              );
-            }
-            if (entry is HeaderEntry) {
-              return SectionHeaderTile(
-                letter: entry.letter,
-                onTap: _showLetterGrid,
-              );
-            }
-            final contact = (entry as ContactEntry).contact;
-            return ContactTile(
-              contact: contact,
-              prioritizeNicknames: prioritizeNicknames,
-              onTap: () => widget.onContactTap?.call(contact),
-            );
-          },
+        if (entry is HeaderEntry) {
+          return SectionHeaderTile(
+            letter: entry.letter,
+            onTap: _showLetterGrid,
+          );
+        }
+        final contact = (entry as ContactEntry).contact;
+        return ContactTile(
+          contact: contact,
+          prioritizeNicknames: _prioritizeNicknames,
+          onTap: () => widget.onContactTap?.call(contact),
         );
       },
     );
