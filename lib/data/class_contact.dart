@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:flutter/material.dart';
 
 class ContactPhone {
   final String number;
@@ -44,6 +45,10 @@ class Contact {
   final String? telegramId;
   final String? weChatId;
 
+  /// Per-contact accent color, derived from a "favorite color" mention
+  /// in the contact's notes. Null means "use the global AccentColor".
+  final Color? accentColor;
+
   const Contact({
     required this.id,
     required this.name,
@@ -63,6 +68,7 @@ class Contact {
     this.signalId,
     this.telegramId,
     this.weChatId,
+    this.accentColor,
   });
 
   Contact copyWith({
@@ -84,6 +90,7 @@ class Contact {
     String? signalId,
     String? telegramId,
     String? weChatId,
+    Color? accentColor,
   }) {
     return Contact(
       id: id ?? this.id,
@@ -104,6 +111,7 @@ class Contact {
       signalId: signalId ?? this.signalId,
       telegramId: telegramId ?? this.telegramId,
       weChatId: weChatId ?? this.weChatId,
+      accentColor: accentColor ?? this.accentColor,
     );
   }
 
