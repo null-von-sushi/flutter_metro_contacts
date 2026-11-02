@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
 import 'data/class_contact.dart';
+import 'data/group_query.dart';
 import 'other/accent_color.dart';
-import 'other/constants.dart';
 import 'other/settings.dart';
 import 'other/wp_text.dart';
 import 'transitions/wp_phone_transition.dart';
@@ -38,7 +38,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
   bool _saving = false;
   String? _loadError;
 
-  final _displayNameCtrl = TextEditingController();
   final _nicknameCtrl = TextEditingController();
   final _firstCtrl = TextEditingController();
   final _middleCtrl = TextEditingController();
@@ -49,11 +48,16 @@ class _ContactEditPageState extends State<ContactEditPage> {
   List<fc.Email> _emails = [];
   List<fc.Website> _websites = [];
 
-  /// Only writable accounts. Read-only accounts (messenger sync accounts,
-  /// DAVx5 address books, etc.) are filtered out at load time — see
-  /// [_isReadOnlyAccount].
+  /// All accounts, unfiltered. If a write fails because the account is
+  /// read-only, the PlatformException is surfaced in a snackbar.
   List<fc.Account> _accounts = [];
   String? _selectedAccountKey;
+
+  /// Groups (which DAVx5 exposes as address books) belonging to the
+  /// currently selected account. Fetched via the native query because
+  /// `FlutterContacts.groups.getAll()` returns empty on this device.
+  List<NativeGroup> _groups = [];
+  String? _selectedGroupId;
 
   bool get _isEdit => widget.contact != null;
 
@@ -69,7 +73,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
   @override
   void dispose() {
-    _displayNameCtrl.dispose();
     _nicknameCtrl.dispose();
     _firstCtrl.dispose();
     _middleCtrl.dispose();
@@ -80,32 +83,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
   static String _accountKeyOf(fc.Account a) => '${a.type}|${a.name}';
 
-  /// Best-effort heuristic for accounts the OS rejects writes to.
-  ///
-  /// Android doesn't expose writability via `ContactContract.Account`, so
-  /// we fall back to skipping types that are known in practice to be
-  /// sync-only: messenger app accounts and DAVx5 address books. If a
-  /// "writable" account turns out not to be, `FlutterContacts.create`
-  /// throws `read_only_contact` and we surface that in the snackbar.
-  bool _isReadOnlyAccount(fc.Account a) {
-    final type = a.type;
-    if (type.isEmpty) return false;
-    if (MessagingAccountTypes.signalMessenger.contains(type)) return true;
-    if (MessagingAccountTypes.telegramMessenger.contains(type)) return true;
-    if (MessagingAccountTypes.weChatMessenger.contains(type)) return true;
-    if (type.startsWith('at.bitfire.davdroid')) return true;
-    if (type.startsWith('com.whatsapp')) return true;
-    if (type == 'com.google.android.ims') return true; // RCS
-    return false;
-  }
-
   Future<void> _loadAccounts() async {
     try {
       final raw = await fc.FlutterContacts.accounts.getAll();
-      final writable = raw
-          .whereType<fc.Account>()
-          .where((a) => !_isReadOnlyAccount(a))
-          .toList();
+      final accounts = raw.whereType<fc.Account>().toList();
 
       fc.Account? defaultAccount;
       try {
@@ -116,26 +97,24 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
       if (!mounted) return;
       setState(() {
-        _accounts = writable;
+        _accounts = accounts;
         _selectedAccountKey = _pickDefaultAccountKey(
-          writable,
+          accounts,
           defaultAccount,
         );
       });
       debugPrint(
-        '[edit] loaded ${writable.length} writable account(s): '
-            '${writable.map((a) => _accountKeyOf(a)).toList()}, '
+        '[edit] loaded ${accounts.length} account(s): '
+            '${accounts.map((a) => _accountKeyOf(a)).toList()}, '
             'selected=$_selectedAccountKey',
       );
+
+      await _reloadGroups();
     } catch (e, s) {
       debugPrint('[edit] _loadAccounts failed: $e\n$s');
     }
   }
 
-  /// Chooses the default account for the dropdown, in this order:
-  ///   1. The account currently filtered in the list, if it's writable.
-  ///   2. The system default account, if it's writable.
-  ///   3. The first writable account.
   String? _pickDefaultAccountKey(
       List<fc.Account> accounts,
       fc.Account? systemDefault,
@@ -159,6 +138,42 @@ class _ContactEditPageState extends State<ContactEditPage> {
     }
 
     return _accountKeyOf(accounts.first);
+  }
+
+  /// Reloads groups for the currently selected account. Groups are what
+  /// DAVx5 calls address books. The native query is used because
+  /// `FlutterContacts.groups.getAll()` returns an empty list on some
+  /// devices (see `GroupQuery`).
+  Future<void> _reloadGroups() async {
+    final key = _selectedAccountKey;
+    if (key == null) {
+      if (mounted) {
+        setState(() {
+          _groups = [];
+          _selectedGroupId = null;
+        });
+      }
+      return;
+    }
+    try {
+      final all = await GroupQuery.fetchAll();
+      final filtered = all.where((g) => g.accountKey == key).toList();
+      if (!mounted) return;
+      setState(() {
+        _groups = filtered;
+        // Drop stale selection if the group no longer exists.
+        if (_selectedGroupId != null &&
+            !filtered.any((g) => g.id == _selectedGroupId)) {
+          _selectedGroupId = null;
+        }
+      });
+      debugPrint(
+        '[edit] loaded ${filtered.length} group(s) for $key: '
+            '${filtered.map((g) => g.title).toList()}',
+      );
+    } catch (e, s) {
+      debugPrint('[edit] _reloadGroups failed: $e\n$s');
+    }
   }
 
   Future<void> _load() async {
@@ -189,7 +204,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
       }
       setState(() {
         _rawContact = raw;
-        _displayNameCtrl.text = raw.displayName ?? '';
         _nicknameCtrl.text = raw.name?.nickname ?? '';
         _firstCtrl.text = raw.name?.first ?? '';
         _middleCtrl.text = raw.name?.middle ?? '';
@@ -217,11 +231,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
     final last = _lastCtrl.text.trim();
     final middle = _middleCtrl.text.trim();
     final nickname = _nicknameCtrl.text.trim();
-    final display = _displayNameCtrl.text.trim();
     final noteText = _noteCtrl.text.trim();
 
-    if (first.isEmpty && last.isEmpty && display.isEmpty) {
-      _showSnack('Enter a display name or a first/last name');
+    if (first.isEmpty && last.isEmpty && nickname.isEmpty) {
+      _showSnack('Enter a first, last, or nickname');
       return;
     }
 
@@ -278,14 +291,29 @@ class _ContactEditPageState extends State<ContactEditPage> {
           account: accountToUse,
         );
         debugPrint('[edit] create ok, id=$newId');
+
+        // If a group was picked, add the freshly-created contact to it.
+        // Errors are logged but don't abort — the contact itself was
+        // already created successfully at this point.
+        final groupId = _selectedGroupId;
+        if (groupId != null && newId.isNotEmpty) {
+          try {
+            await fc.FlutterContacts.groups.addContacts(
+              groupId: groupId,
+              contactIds: [newId],
+            );
+            debugPrint('[edit] added contact $newId to group $groupId');
+          } catch (e, s) {
+            debugPrint(
+              '[edit] group assignment failed (contact still created): '
+                  '$e\n$s',
+            );
+          }
+        }
       }
 
       if (!mounted) return;
 
-      // The write already succeeded. If the caller's onSaved callback
-      // throws, we still want to pop and let the user see their new
-      // contact — the alternative is telling them "save failed" when
-      // it didn't.
       try {
         widget.onSaved?.call();
       } catch (e, s) {
@@ -500,8 +528,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }
 
   List<Widget> _buildForm(Color accent) {
+    // Note: no Display Name field. FlutterContacts ignores the value on
+    // create/update — Android recomposes DISPLAY_NAME_PRIMARY from the
+    // structured name parts — so editing it would be misleading.
     final sections = <Widget>[
-      _buildTextField('Display Name', _displayNameCtrl),
       _buildTextField('Nickname', _nicknameCtrl),
       _buildTextField('First Name', _firstCtrl),
       _buildTextField('Middle Name', _middleCtrl),
@@ -564,8 +594,14 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
     sections.add(_buildTextField('Note', _noteCtrl, multiline: true));
 
+    // Account picker — only in create mode (FlutterContacts.update has no
+    // account parameter, so an existing contact can't be moved between
+    // accounts through this form).
     if (!_isEdit && _accounts.isNotEmpty) {
       sections.add(_buildAccountPicker());
+      if (_groups.isNotEmpty) {
+        sections.add(_buildGroupPicker());
+      }
     }
 
     return sections;
@@ -676,7 +712,79 @@ class _ContactEditPageState extends State<ContactEditPage> {
                     ),
                   ),
               ],
-              onChanged: (v) => setState(() => _selectedAccountKey = v),
+              onChanged: (v) {
+                setState(() {
+                  _selectedAccountKey = v;
+                  // Clear group selection — groups are account-scoped.
+                  _selectedGroupId = null;
+                  _groups = [];
+                });
+                _reloadGroups();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupPicker() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            wpLowercase('Address book'),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+              color: Colors.white54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: DropdownButton<String?>(
+              isExpanded: true,
+              value: _selectedGroupId,
+              underline: const SizedBox.shrink(),
+              dropdownColor: const Color(0xFF1F1F1F),
+              icon: const Icon(
+                Icons.arrow_drop_down,
+                color: Colors.white54,
+              ),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text(
+                    'default',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+                for (final g in _groups)
+                  DropdownMenuItem<String?>(
+                    value: g.id,
+                    child: Text(
+                      g.title,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _selectedGroupId = v),
             ),
           ),
         ],
