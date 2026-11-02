@@ -7,7 +7,6 @@ const int _noYearSentinel = 1804;
 
 class ContactRepository {
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts() async {
-
     if (kDebugMode) {
       await Future.delayed(const Duration(seconds: 5));
     }
@@ -20,8 +19,7 @@ class ContactRepository {
       return (contacts: <Contact>[], meContact: null);
     }
 
-    // ── Pass 1: everyone, thumbnails only ────────────────────────────
-    final rawContacts = await FlutterContacts.getAll(
+    final fetchedContacts = await FlutterContacts.getAll(
       properties: {
         ContactProperty.name,
         ContactProperty.photoThumbnail,
@@ -30,6 +28,9 @@ class ContactRepository {
         ContactProperty.address,
         ContactProperty.note,
         ContactProperty.event,
+        ContactProperty.identifiers,
+        ContactProperty.website,
+        ContactProperty.socialMedia,
       },
     );
 
@@ -37,11 +38,37 @@ class ContactRepository {
     Contact? meContact;
     String? meId;
 
-    for (final c in rawContacts) {
+    for (final c in fetchedContacts) {
       final name = c.displayName;
       final nickname = c.name?.nickname;
       final isMe =
           nickname != null && meStrings.contains(nickname.trim().toLowerCase());
+
+      // ── Messenger detection: account type OR phone label ──────────
+      final accountTypes = (c.android?.identifiers?.rawContacts ?? const [])
+          .map((rc) => rc.account?.type)
+          .whereType<String>()
+          .toList();
+
+      final signalId = _findMessengerId(
+        c,
+        MessagingAccountTypes.signalMessengerLabels,
+      );
+      final telegramId = _findMessengerId(
+        c,
+        MessagingAccountTypes.telegramMessengerLabels,
+      );
+      final weChatId = _findMessengerId(
+        c,
+        MessagingAccountTypes.weChatMessengerLabels,
+      );
+
+      final hasSignal = signalId != null ||
+          accountTypes.any(MessagingAccountTypes.signalMessenger.contains);
+      final hasTelegram = telegramId != null ||
+          accountTypes.any(MessagingAccountTypes.telegramMessenger.contains);
+      final hasWeChat = weChatId != null ||
+          accountTypes.any(MessagingAccountTypes.weChatMessenger.contains);
 
       final contact = Contact(
         id: c.id ?? '',
@@ -49,13 +76,19 @@ class ContactRepository {
         nickname: nickname,
         status: ' ',
         photo: c.photo?.thumbnail,
-        photoFull: null, // filled in during pass 2 if this is Me
+        photoFull: null,
         isMe: isMe,
         phones: _mapPhones(c),
         emails: _mapEmails(c),
         addresses: _mapAddresses(c),
         notes: _mapNotes(c),
         birthday: _extractBirthday(c),
+        hasTelegram: hasTelegram,
+        hasSignal: hasSignal,
+        hasWeChat: hasWeChat,
+        signalId: signalId,
+        telegramId: telegramId,
+        weChatId: weChatId,
       );
 
       if (isMe) {
@@ -68,7 +101,6 @@ class ContactRepository {
       }
     }
 
-    // ── Pass 2: full-res photo for just the Me contact ──────────────
     if (meId != null) {
       try {
         final full = await FlutterContacts.get(
@@ -79,12 +111,105 @@ class ContactRepository {
         if (bytes != null && bytes.isNotEmpty) {
           meContact = meContact!.copyWith(photoFull: bytes);
         }
-      } catch (_) {
-        // Full-res fetch is best-effort; fall back to the thumbnail.
-      }
+      } catch (_) {}
     }
 
     return (contacts: otherContacts, meContact: meContact);
+  }
+
+  /// Finds the best available identifier for a messenger, checking URLs
+  /// (Website + IMPP) first, then phone labels. Returns null if none found.
+  String? _findMessengerId(dynamic c, List<String> labels) {
+    return _findIdFromUrls(c, labels) ?? _findIdFromPhoneLabels(c, labels);
+  }
+
+  /// Checks every URL on the contact (from Website.url and SocialMedia.userName)
+  /// against [labels] as case-insensitive prefixes. Returns the extracted
+  /// handle from the first match, or null if none match.
+  String? _findIdFromUrls(dynamic c, List<String> labels) {
+    final urls = <String>[];
+    try {
+      for (final w in (c.websites as List? ?? [])) {
+        final u = (w.url as String?) ?? '';
+        if (u.isNotEmpty) urls.add(u);
+      }
+    } catch (_) {}
+    try {
+      for (final s in (c.socialMedias as List? ?? [])) {
+        final u = (s.userName as String?) ?? '';
+        if (u.isNotEmpty) urls.add(u);
+      }
+    } catch (_) {}
+
+    for (final url in urls) {
+      final lower = url.toLowerCase();
+      for (final label in labels) {
+        if (lower.startsWith(label.toLowerCase())) {
+          return _extractHandleFromUrl(url, label);
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Checks each phone's resolved header against [labels]. Returns the
+  /// phone number of the first matching phone, or null.
+  String? _findIdFromPhoneLabels(dynamic c, List<String> labels) {
+    try {
+      for (final p in (c.phones as List)) {
+        final header = _headerFor(p, fallback: '').toLowerCase();
+        if (header.isNotEmpty && labels.contains(header)) {
+          final number = (p.number as String?) ?? '';
+          if (number.isNotEmpty) return number;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Extracts the human-meaningful handle from a URL that was already
+  /// confirmed to start with [prefix]. Order of preference:
+  ///   query param (?username=, ?user=, ?id=, ?phone=)
+  ///   bare query (?johndoe)
+  ///   fragment last segment (#p/+441234567890)
+  ///   path last segment (/user/johndoe)
+  ///   host (fallback)
+  ///   full URL (last resort)
+  String _extractHandleFromUrl(String url, String prefix) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return url;
+
+    // 1. Named query parameter.
+    if (uri.queryParameters.isNotEmpty) {
+      final known = uri.queryParameters['username'] ??
+          uri.queryParameters['user'] ??
+          uri.queryParameters['id'] ??
+          uri.queryParameters['phone'];
+      if (known != null && known.isNotEmpty) return known;
+    }
+
+    // 2. Bare query with no '=' (e.g. weixin://dl/chat?johndoe).
+    if (uri.query.isNotEmpty && !uri.query.contains('=')) {
+      return uri.query;
+    }
+
+    // 3. Fragment last segment (e.g. signal.me/#p/+441234567890).
+    if (uri.fragment.isNotEmpty) {
+      final frag = uri.fragment;
+      return frag.contains('/') ? frag.split('/').last : frag;
+    }
+
+    // 4. Path last segment.
+    if (uri.pathSegments.isNotEmpty) {
+      final last = uri.pathSegments.last;
+      if (last.isNotEmpty) return last;
+    }
+
+    // 5. Host.
+    if (uri.host.isNotEmpty) return uri.host;
+
+    // 6. Give up — return the whole URL so the user can see what we got.
+    return url;
   }
 
   // ── Phones / Emails / Addresses / Notes ─────────────────────────────

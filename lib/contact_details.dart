@@ -9,6 +9,7 @@ import 'other/accent_color.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
+import 'other/wp_text.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -77,9 +78,12 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     );
   }
 
-  /// Builds a `tel:` URI. Strips everything except digits and a leading `+`,
-  /// because dialers expect a clean number even though they tolerate spaces
-  /// and dashes.
+  String _internationalise(String number) {
+    final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.isEmpty) return '';
+    return cleaned.startsWith('+') ? cleaned : '+$cleaned';
+  }
+
   void _callNumber(String number) {
     final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
     if (cleaned.isEmpty) {
@@ -89,16 +93,51 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(Uri(scheme: 'tel', path: cleaned), 'No dialer app found');
   }
 
-  void _sendEmail(String address) {
-    _launchUri(
-      Uri(scheme: 'mailto', path: address),
-      'No email app found',
+  void _sendSms(String number) {
+    final cleaned = number.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleaned.isEmpty) {
+      _showError('No number to message');
+      return;
+    }
+    _launchUri(Uri(scheme: 'sms', path: cleaned), 'No messaging app found');
+  }
+
+  Future<void> _copyAndOpenWeChat(String identifier) async {
+    HapticFeedback.lightImpact();
+    await Clipboard.setData(ClipboardData(text: identifier));
+
+    // Try to open WeChat
+    bool opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse('weixin://'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    // Determine the message based on whether WeChat opened successfully
+    final String message = opened
+        ? 'Copied — switching to WeChat'
+        : 'Copied';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1F1F1F),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white),
+        ),
+        duration: const Duration(seconds: 4), // Slightly longer to give time to read
+      ),
     );
   }
 
-  /// Opens the address in a maps app. Uses `geo:` first (which opens any
-  /// installed maps app), then falls back to Google Maps in a browser if
-  /// no maps app is installed.
+  void _sendEmail(String address) {
+    _launchUri(Uri(scheme: 'mailto', path: address), 'No email app found');
+  }
+
   Future<void> _openAddress(String address) async {
     HapticFeedback.lightImpact();
     final encoded = Uri.encodeComponent(address);
@@ -117,6 +156,42 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       }
     } catch (_) {}
     _showError('No maps app found');
+  }
+
+  /// Returns true if [identifier] plausibly looks like a phone number
+  /// (contains enough digits to be a real number rather than a username).
+  bool _looksLikePhone(String identifier) {
+    final digits = identifier.replaceAll(RegExp(r'[^\d]'), '');
+    return digits.length >= 6;
+  }
+
+  void _openSignal(String identifier) {
+    if (identifier.isEmpty) {
+      _showError('No Signal identifier');
+      return;
+    }
+    final target = _looksLikePhone(identifier)
+        ? _internationalise(identifier)
+        : identifier;
+    _launchUri(
+      Uri.parse('https://signal.me/#p/$target'),
+      'Signal not installed',
+    );
+  }
+
+  void _openTelegram(String identifier) {
+    if (identifier.isEmpty) {
+      _showError('No Telegram identifier');
+      return;
+    }
+    final Uri uri;
+    if (_looksLikePhone(identifier)) {
+      final target = _internationalise(identifier);
+      uri = Uri.parse('tg://resolve?phone=$target');
+    } else {
+      uri = Uri.parse('tg://resolve?domain=$identifier');
+    }
+    _launchUri(uri, 'Telegram not installed');
   }
 
   // ── Existing dialogs ──────────────────────────────────────────────
@@ -222,53 +297,111 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     }
 
     final infoSections = <Widget>[];
+
+    // Phones: two sections each, "Call X" and "Text X".
     for (final p in c.phones) {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: p.header,
+          header: 'Call ${p.header} number',
           value: p.number,
           onTap: () => _callNumber(p.number),
         ),
       ));
-    }
-    for (final e in c.emails) {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: e.header,
+          header: 'Text ${p.header} number',
+          value: p.number,
+          onTap: () => _sendSms(p.number),
+        ),
+      ));
+    }
+
+    // Signal
+    if (c.hasSignal && (c.signalId != null || c.phones.isNotEmpty)) {
+      final id = c.signalId ?? c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Contact via Signal',
+          value: id,
+          onTap: () => _openSignal(id),
+        ),
+      ));
+    }
+
+    // Telegram
+    if (c.hasTelegram && (c.telegramId != null || c.phones.isNotEmpty)) {
+      final id = c.telegramId ?? c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Contact via Telegram',
+          value: id,
+          onTap: () => _openTelegram(id),
+        ),
+      ));
+    }
+
+    // WeChat (copy-only, no reliable deep link)
+    // WeChat (copy + open — no reliable deep link, so we do best-effort)
+    if (c.hasWeChat && (c.weChatId != null || c.phones.isNotEmpty)) {
+      final id = c.weChatId ?? c.phones.first.number;
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: 'Copy WeChat ID',
+          value: id,
+          onTap: () => _copyAndOpenWeChat(id),
+        ),
+      ));
+    }
+
+    // Emails: "Email" if unlabeled, "Email Home"/"Email Work" otherwise.
+    for (final e in c.emails) {
+      final header = e.header == 'Email' ? 'Email' : 'Email ${e.header}';
+      infoSections.add(FeatherLayer(
+        index: assign(),
+        child: _InfoSection(
+          header: header,
           value: e.address,
           onTap: () => _sendEmail(e.address),
         ),
       ));
     }
+
+    // Addresses: "Show on Map" if unlabeled, "Show Home on Map" otherwise.
     for (final a in c.addresses) {
+      final header = a.header == 'Address'
+          ? 'Show on Map'
+          : 'Show ${a.header} on Map';
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
-          header: a.header,
+          header: header,
           value: a.formatted,
           onTap: () => _openAddress(a.formatted),
         ),
       ));
     }
+
     if (c.birthday != null) {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Birthday',
           value: _formatBirthday(c.birthday!),
-          // Birthday has no tap action.
         ),
       ));
     }
+
     if (c.notes.isNotEmpty) {
       infoSections.add(FeatherLayer(
         index: assign(),
         child: _InfoSection(
           header: 'Notes',
           value: c.notes.join('\n\n'),
-          // Notes have no tap action.
         ),
       ));
     }
@@ -443,6 +576,7 @@ class _ProfilePhoto extends StatelessWidget {
   }
 }
 
+/// A section with a header (verb + type) and a single value underneath.
 class _InfoSection extends StatelessWidget {
   final String header;
   final String value;
@@ -462,7 +596,7 @@ class _InfoSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            header,
+          wpLowercase(header), // ← single point of application,
             style: const TextStyle(
               fontSize: 25,
               fontWeight: FontWeight.w500,
@@ -485,8 +619,6 @@ class _InfoSection extends StatelessWidget {
     if (onTap == null) return content;
     return InkWell(
       onTap: onTap,
-      // WP8.1 had no Material ripple, but a subtle highlight matches
-      // the "press" affordance the platform did have.
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.white.withOpacity(0.06),
       child: content,
