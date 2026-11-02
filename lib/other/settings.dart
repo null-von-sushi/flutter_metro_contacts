@@ -7,6 +7,7 @@ import 'constants.dart';
 /// Persisted keys:
 ///   prioritizeNicknames: bool
 ///   parseNotesForAccentColor: bool
+///   surnameFirst: bool
 ///   accountFilter: String (composite "type|name" key)
 ///   groupFilter: String (Group.id)
 ///   selectedAccentArgb: int (ARGB)
@@ -16,31 +17,36 @@ class Settings {
   final ValueNotifier<bool> prioritizeNicknames;
   final ValueNotifier<bool> parseNotesForAccentColor;
 
+  /// When true, names are composed from familyName + givenName with the
+  /// surname first, regardless of the platform's locale-derived order.
+  /// Falls back to the system display name if the structured parts are
+  /// empty. See `Contact.nameFor`.
+  final ValueNotifier<bool> surnameFirst;
+
   final ValueNotifier<String?> accountFilter;
   final ValueNotifier<String?> groupFilter;
 
-  /// ARGB int of the accent color the user selected in settings.
   final ValueNotifier<int> selectedAccentArgb;
-
-  /// When true and MetroV is installed, the app uses MetroV's accent
-  /// color instead of [selectedAccentArgb]. Defaults to true.
   final ValueNotifier<bool> useLauncherAccent;
 
   Settings._({
     required bool prioritizeNicknames,
     required bool parseNotesForAccentColor,
+    required bool surnameFirst,
     required String? accountFilter,
     required String? groupFilter,
     required int selectedAccentArgb,
     required bool useLauncherAccent,
   })  : prioritizeNicknames = ValueNotifier(prioritizeNicknames),
         parseNotesForAccentColor = ValueNotifier(parseNotesForAccentColor),
+        surnameFirst = ValueNotifier(surnameFirst),
         accountFilter = ValueNotifier(accountFilter),
         groupFilter = ValueNotifier(groupFilter),
         selectedAccentArgb = ValueNotifier(selectedAccentArgb),
         useLauncherAccent = ValueNotifier(useLauncherAccent) {
     this.prioritizeNicknames.addListener(_save);
     this.parseNotesForAccentColor.addListener(_save);
+    this.surnameFirst.addListener(_save);
     this.accountFilter.addListener(_save);
     this.groupFilter.addListener(_save);
     this.selectedAccentArgb.addListener(_save);
@@ -50,6 +56,7 @@ class Settings {
   factory Settings.inMemory({
     bool prioritizeNicknames = false,
     bool parseNotesForAccentColor = false,
+    bool surnameFirst = false,
     String? accountFilter,
     String? groupFilter,
     int selectedAccentArgb = accentColorFallbackArgb,
@@ -58,6 +65,7 @@ class Settings {
       Settings._(
         prioritizeNicknames: prioritizeNicknames,
         parseNotesForAccentColor: parseNotesForAccentColor,
+        surnameFirst: surnameFirst,
         accountFilter: accountFilter,
         groupFilter: groupFilter,
         selectedAccentArgb: selectedAccentArgb,
@@ -70,6 +78,7 @@ class Settings {
       prioritizeNicknames: prefs.getBool('prioritizeNicknames') ?? false,
       parseNotesForAccentColor:
       prefs.getBool('parseNotesForAccentColor') ?? false,
+      surnameFirst: prefs.getBool('surnameFirst') ?? false,
       accountFilter: prefs.getString('accountFilter'),
       groupFilter: prefs.getString('groupFilter'),
       selectedAccentArgb:
@@ -83,6 +92,7 @@ class Settings {
     await prefs.setBool('prioritizeNicknames', prioritizeNicknames.value);
     await prefs.setBool(
         'parseNotesForAccentColor', parseNotesForAccentColor.value);
+    await prefs.setBool('surnameFirst', surnameFirst.value);
     await prefs.setInt('selectedAccentArgb', selectedAccentArgb.value);
     await prefs.setBool('useLauncherAccent', useLauncherAccent.value);
 
@@ -103,6 +113,7 @@ class Settings {
   void dispose() {
     prioritizeNicknames.dispose();
     parseNotesForAccentColor.dispose();
+    surnameFirst.dispose();
     accountFilter.dispose();
     groupFilter.dispose();
     selectedAccentArgb.dispose();

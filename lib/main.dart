@@ -25,6 +25,7 @@ void main() async {
 }
 
 const int _homeMaxIndex = 1;
+const int _settingsMaxIndex = 12;
 
 class MyApp extends StatefulWidget {
   final Settings appSettings;
@@ -53,9 +54,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// Re-fetch MetroV's accent whenever the app returns to foreground.
-  /// Covers the "user changed their accent in MetroV, comes back to
-  /// People" flow without requiring a restart.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -65,7 +63,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   Future<void> _refreshMetrovAccent() async {
     final fresh = await MetrovThemeService.getAccentColor();
-    // Nothing changed — don't trigger a rebuild.
     if (fresh?.value == MetrovAccent?.value) return;
     if (fresh == null && MetrovAccent == null) return;
     MetrovAccent = fresh;
@@ -137,7 +134,7 @@ class _PeoplePageState extends State<PeoplePage>
       vsync: this,
       duration: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 10,
+        incomingMaxIndex: _settingsMaxIndex,
       ).routeDuration(),
     );
 
@@ -175,7 +172,7 @@ class _PeoplePageState extends State<PeoplePage>
     _exitController.forward();
     Navigator.of(context).push(
       WpPhonePageRoute(
-        incomingMaxIndex: 10,
+        incomingMaxIndex: _settingsMaxIndex,
         outgoingMaxIndex: _homeMaxIndex,
         builder: (_) => SettingsPage(
           onPopStart: _exitController.reverse,
@@ -228,7 +225,7 @@ class _PeoplePageState extends State<PeoplePage>
     return WpPhoneFeatherScope(
       timing: WpTurnstileFeatherTiming(
         outgoingMaxIndex: _homeMaxIndex,
-        incomingMaxIndex: 10,
+        incomingMaxIndex: _settingsMaxIndex,
       ),
       animation: route?.animation ?? const AlwaysStoppedAnimation(1.0),
       secondaryAnimation: _exitController,

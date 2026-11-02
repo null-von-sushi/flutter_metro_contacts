@@ -30,29 +30,32 @@ class ContactListState extends State<ContactList> {
   late List<ListEntry> _entries;
   late Map<String, int> _letterToIndex;
   late bool _prioritizeNicknames;
+  late bool _surnameFirst;
 
   @override
   void initState() {
     super.initState();
     _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+    _surnameFirst = widget.settings.surnameFirst.value;
     _rebuild();
     widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+    widget.settings.surnameFirst.addListener(_onSettingChanged);
   }
 
   @override
   void didUpdateWidget(ContactList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Rebind listener if the Settings instance was swapped.
     if (oldWidget.settings != widget.settings) {
-      oldWidget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+      oldWidget.settings.prioritizeNicknames
+          .removeListener(_onSettingChanged);
+      oldWidget.settings.surnameFirst.removeListener(_onSettingChanged);
       _prioritizeNicknames = widget.settings.prioritizeNicknames.value;
+      _surnameFirst = widget.settings.surnameFirst.value;
       widget.settings.prioritizeNicknames.addListener(_onSettingChanged);
+      widget.settings.surnameFirst.addListener(_onSettingChanged);
       _rebuild();
       return;
     }
-    // Rebuild entries when the contacts list itself changes — otherwise
-    // filtered results from a fresh fetch would never replace the old
-    // entries built in initState.
     if (!identical(oldWidget.contacts, widget.contacts) ||
         !identical(oldWidget.meContact, widget.meContact)) {
       _rebuild();
@@ -62,14 +65,18 @@ class ContactListState extends State<ContactList> {
   @override
   void dispose() {
     widget.settings.prioritizeNicknames.removeListener(_onSettingChanged);
+    widget.settings.surnameFirst.removeListener(_onSettingChanged);
     super.dispose();
   }
 
   void _onSettingChanged() {
-    final newValue = widget.settings.prioritizeNicknames.value;
-    if (newValue != _prioritizeNicknames) {
+    final newPrioritize = widget.settings.prioritizeNicknames.value;
+    final newSurnameFirst = widget.settings.surnameFirst.value;
+    if (newPrioritize != _prioritizeNicknames ||
+        newSurnameFirst != _surnameFirst) {
       setState(() {
-        _prioritizeNicknames = newValue;
+        _prioritizeNicknames = newPrioritize;
+        _surnameFirst = newSurnameFirst;
         _rebuild();
       });
     }
@@ -80,6 +87,7 @@ class ContactListState extends State<ContactList> {
       widget.contacts,
       widget.meContact,
       prioritizeNicknames: _prioritizeNicknames,
+      surnameFirst: _surnameFirst,
     );
     _entries = result.entries;
     _letterToIndex = result.letterToIndex;
@@ -129,6 +137,7 @@ class ContactListState extends State<ContactList> {
         if (entry is MeEntry) {
           return MeTile(
             contact: entry.contact,
+            surnameFirst: _surnameFirst,
             onTap: () => widget.onContactTap?.call(entry.contact),
           );
         }
@@ -142,6 +151,7 @@ class ContactListState extends State<ContactList> {
         return ContactTile(
           contact: contact,
           prioritizeNicknames: _prioritizeNicknames,
+          surnameFirst: _surnameFirst,
           onTap: () => widget.onContactTap?.call(contact),
         );
       },

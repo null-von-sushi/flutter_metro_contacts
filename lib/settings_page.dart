@@ -148,8 +148,6 @@ class _SettingsPageState extends State<SettingsPage> {
     Navigator.of(context).pop();
   }
 
-  // ── Account picker ──────────────────────────────────────────────────
-
   Future<void> _pickAccount() async {
     final accounts = await _loadAccounts();
     if (!mounted) return;
@@ -187,8 +185,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // ── Group picker ────────────────────────────────────────────────────
-
   Future<void> _pickGroup() async {
     final accountKey = widget.settings.accountFilter.value;
     if (accountKey == null) {
@@ -223,8 +219,6 @@ class _SettingsPageState extends State<SettingsPage> {
     widget.settings.groupFilter.value =
     selected == '__all__' ? null : selected;
   }
-
-  // ── Accent color picker ─────────────────────────────────────────────
 
   Future<void> _pickAccentColor() async {
     final currentArgb = widget.settings.selectedAccentArgb.value;
@@ -351,8 +345,45 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
+                        // ── NAMES ───────────────────────────────────
                         const FeatherLayer(
                           index: 1,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 16.0, vertical: 8.0),
+                            child: Text(
+                              'NAMES',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.2,
+                                color: Colors.white54,
+                              ),
+                            ),
+                          ),
+                        ),
+                        FeatherLayer(
+                          index: 2,
+                          child: Padding(
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: widget.settings.surnameFirst,
+                              builder: (context, value, _) => WpToggleSwitch(
+                                header: 'Always show surname first',
+                                value: value,
+                                accentColor: AccentColor,
+                                onChanged: (v) =>
+                                widget.settings.surnameFirst.value = v,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── SHOWING ─────────────────────────────────
+                        const FeatherLayer(
+                          index: 3,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -368,7 +399,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 2,
+                          index: 4,
                           child: _FilterRow(
                             label: 'account',
                             value: accountLabel,
@@ -376,7 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 3,
+                          index: 5,
                           child: _FilterRow(
                             label: 'group',
                             value: groupLabel,
@@ -387,8 +418,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
+                        // ── CONTACT DISPLAY ─────────────────────────
                         const FeatherLayer(
-                          index: 4,
+                          index: 6,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -404,7 +436,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 5,
+                          index: 7,
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
@@ -425,8 +457,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
+                        // ── THEMING ─────────────────────────────────
                         const FeatherLayer(
-                          index: 6,
+                          index: 8,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
@@ -442,7 +475,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 7,
+                          index: 9,
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
@@ -459,9 +492,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                           ),
                         ),
-                        // Accent colour picker — tap to choose from the WP palette.
                         FeatherLayer(
-                          index: 8,
+                          index: 10,
                           child: _FilterRow(
                             label: 'accent colour',
                             value: accentName,
@@ -469,10 +501,9 @@ class _SettingsPageState extends State<SettingsPage> {
                             onTap: _pickAccentColor,
                           ),
                         ),
-                        // Use launcher accent — only when MetroV is installed.
                         if (_metroVLauncherInstalled == true)
                           FeatherLayer(
-                            index: 9,
+                            index: 11,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16.0, vertical: 8.0),
@@ -492,11 +523,6 @@ class _SettingsPageState extends State<SettingsPage> {
                                         ),
                                   ),
                                   const SizedBox(height: 8),
-                                  // Diagnostic row: shows the value the app
-                                  // actually read from MetroV. If this is
-                                  // black/transparent while MetroV itself is
-                                  // colored, the query is the problem — not
-                                  // the toggle.
                                   Row(
                                     children: [
                                       Container(
@@ -533,7 +559,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (_metroVNavbarInstalled == true) ...[
                           const SizedBox(height: 24),
                           FeatherLayer(
-                            index: 10,
+                            index: 12,
                             child: InkWell(
                               onTap: _copyBarColorHex,
                               splashFactory: NoSplash.splashFactory,

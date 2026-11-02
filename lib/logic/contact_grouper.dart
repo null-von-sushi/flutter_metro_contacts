@@ -9,15 +9,19 @@ import 'pinyin_utils.dart';
 /// 3. Flattens them into a single list of ListEntry objects.
 /// 4. Builds the letter-to-index map for the jump grid.
 ///
-/// When [prioritizeNicknames] is true, the sort key and grouping letter
-/// come from each contact's nickname (falling back to name when no
-/// nickname is set). Otherwise they come from the legal name.
+/// The sort key and grouping letter come from [Contact.displayTitle],
+/// which honours both [prioritizeNicknames] and [surnameFirst]. So a
+/// contact with the surname-first toggle on groups under their surname
+/// letter, and with the nickname-first toggle on groups under their
+/// nickname letter.
 ({List<ListEntry> entries, Map<String, int> letterToIndex}) groupContacts(
     List<Contact> contacts,
     Contact? meContact, {
       required bool prioritizeNicknames,
+      required bool surnameFirst,
     }) {
-  String sortKey(Contact c) => c.displayTitle(prioritizeNicknames);
+  String sortKey(Contact c) =>
+      c.displayTitle(prioritizeNicknames, surnameFirst);
 
   final sorted = List<Contact>.from(contacts)
     ..sort((a, b) {

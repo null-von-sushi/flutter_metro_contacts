@@ -21,7 +21,20 @@ class ContactAddress {
 
 class Contact {
   final String id;
+
+  /// The system-provided display name from Android's aggregated
+  /// `DISPLAY_NAME_PRIMARY`. This is already locale-aware (CJK contacts
+  /// come out family-name-first, Western contacts come out
+  /// given-name-first) because AOSP's `NameSplitter` composes it.
   final String name;
+
+  /// Structured name parts, if the contact has them. Used by [nameFor]
+  /// to compose a custom display order when the user enables the
+  /// surname-first setting. Null for contacts that only have a display
+  /// name (some vCard 2.1 sources, Exchange imports, etc.).
+  final String? familyName;
+  final String? givenName;
+
   final String? nickname;
   final String status;
   final Uint8List? photo;
@@ -42,9 +55,6 @@ class Contact {
   final String? telegramId;
   final String? weChatId;
 
-  /// Normal website URLs. URLs that matched a messenger label (Signal,
-  /// Telegram, WeChat) are excluded — those are surfaced as messenger
-  /// sections instead.
   final List<String> websites;
 
   final Color? accentColor;
@@ -52,6 +62,8 @@ class Contact {
   const Contact({
     required this.id,
     required this.name,
+    this.familyName,
+    this.givenName,
     this.nickname,
     required this.status,
     this.photo,
@@ -75,6 +87,8 @@ class Contact {
   Contact copyWith({
     String? id,
     String? name,
+    String? familyName,
+    String? givenName,
     String? nickname,
     String? status,
     Uint8List? photo,
@@ -97,6 +111,8 @@ class Contact {
     return Contact(
       id: id ?? this.id,
       name: name ?? this.name,
+      familyName: familyName ?? this.familyName,
+      givenName: givenName ?? this.givenName,
       nickname: nickname ?? this.nickname,
       status: status ?? this.status,
       photo: photo ?? this.photo,
@@ -118,27 +134,84 @@ class Contact {
     );
   }
 
-  String displayTitle(bool prioritizeNicknames) {
-    if (prioritizeNicknames) {
-      return (nickname != null && nickname!.isNotEmpty) ? nickname! : name;
+  /// The display name for this contact, honouring the surname-first
+  /// setting.
+  ///
+  /// When [surnameFirst] is false, returns the system-provided [name]
+  /// verbatim — Android already composes it in the correct order for
+  /// the contact's script.
+  ///
+  /// When [surnameFirst] is true, composes a new string from
+  /// [familyName] and [givenName]. If both are empty, falls back to
+  /// [name]. Format is script-aware:
+  ///   - Both parts CJK (e.g. 張 / 三) → `張三` (no separator)
+  ///   - One part CJK, the other not → `張 三` (space)
+  ///   - Neither CJK → `Smith, John` (comma + space)
+  String nameFor(bool surnameFirst) {
+    if (!surnameFirst) return name;
+
+    final family = (familyName ?? '').trim();
+    final given = (givenName ?? '').trim();
+
+    if (family.isEmpty && given.isEmpty) return name;
+    if (family.isEmpty) return given;
+    if (given.isEmpty) return family;
+
+    final familyIsCJK = _containsCJK(family);
+    final givenIsCJK = _containsCJK(given);
+
+    if (familyIsCJK && givenIsCJK) {
+      // e.g. 張 + 三 → 張三
+      return '$family$given';
     }
-    return name;
+    if (familyIsCJK || givenIsCJK) {
+      // Mixed script — space-separate so the two don't visually glue.
+      return '$family $given';
+    }
+    // Non-CJK — comma format (Western academic style).
+    return '$family, $given';
   }
 
-  String displaySubtitle(bool prioritizeNicknames) {
-    final hasNickname =
-        nickname != null && nickname!.isNotEmpty && nickname != name;
+  /// True if [s] contains any character from a CJK script. Checks
+  /// Unified Ideographs, Extension A, Hangul, Hiragana/Katakana, and
+  /// Bopomofo. Single Hanzi is enough to trigger.
+  static bool _containsCJK(String s) {
+    for (final r in s.runes) {
+      if ((r >= 0x4E00 && r <= 0x9FFF) ||   // CJK Unified Ideographs
+          (r >= 0x3400 && r <= 0x4DBF) ||   // CJK Extension A
+          (r >= 0xAC00 && r <= 0xD7AF) ||   // Hangul Syllables
+          (r >= 0x3040 && r <= 0x30FF) ||   // Hiragana / Katakana
+          (r >= 0x3100 && r <= 0x312F)) {   // Bopomofo
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String displayTitle(bool prioritizeNicknames, bool surnameFirst) {
+    final n = nameFor(surnameFirst);
     if (prioritizeNicknames) {
-      return hasNickname ? name : status;
+      return (nickname != null && nickname!.isNotEmpty) ? nickname! : n;
+    }
+    return n;
+  }
+
+  String displaySubtitle(bool prioritizeNicknames, bool surnameFirst) {
+    final n = nameFor(surnameFirst);
+    final hasNickname =
+        nickname != null && nickname!.isNotEmpty && nickname != n;
+    if (prioritizeNicknames) {
+      return hasNickname ? n : status;
     }
     return hasNickname ? nickname! : status;
   }
 
-  String get detailsTitle {
-    if (nickname != null && nickname!.isNotEmpty && nickname != name) {
-      return '$name ($nickname)';
+  String detailsTitle(bool surnameFirst) {
+    final n = nameFor(surnameFirst);
+    if (nickname != null && nickname!.isNotEmpty && nickname != n) {
+      return '$n ($nickname)';
     }
-    return name;
+    return n;
   }
 
   bool get isBirthdayToday {

@@ -5,14 +5,20 @@ import '../other/accent_color.dart';
 class MeTile extends StatelessWidget {
   final Contact contact;
   final VoidCallback? onTap;
+  final bool surnameFirst;
 
-  const MeTile({super.key, required this.contact, this.onTap});
+  const MeTile({
+    super.key,
+    required this.contact,
+    this.onTap,
+    this.surnameFirst = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final avatarLetter = contact.name.isNotEmpty
-        ? contact.name[0].toUpperCase()
-        : '#';
+    final displayName = contact.nameFor(surnameFirst);
+    final avatarLetter =
+    displayName.isNotEmpty ? displayName[0].toUpperCase() : '#';
 
     final bytes = contact.photoFull ?? contact.photo;
 
@@ -55,7 +61,7 @@ class MeTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    contact.name,
+                    displayName,
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w300,
@@ -120,22 +126,24 @@ class ContactTile extends StatelessWidget {
   final Contact contact;
   final VoidCallback? onTap;
   final bool prioritizeNicknames;
+  final bool surnameFirst;
 
   const ContactTile({
     super.key,
     required this.contact,
     this.onTap,
     this.prioritizeNicknames = false,
+    this.surnameFirst = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final avatarLetter = contact.name.isNotEmpty
-        ? contact.name[0].toUpperCase()
-        : '#';
+    final displayName = contact.nameFor(surnameFirst);
+    final avatarLetter =
+    displayName.isNotEmpty ? displayName[0].toUpperCase() : '#';
 
-    final title = contact.displayTitle(prioritizeNicknames);
-    final subtitle = contact.displaySubtitle(prioritizeNicknames);
+    final title = contact.displayTitle(prioritizeNicknames, surnameFirst);
+    final subtitle = contact.displaySubtitle(prioritizeNicknames, surnameFirst);
 
     return InkWell(
       onTap: onTap,

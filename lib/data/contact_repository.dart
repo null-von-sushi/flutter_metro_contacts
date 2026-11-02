@@ -7,7 +7,6 @@ import 'class_contact.dart';
 const int _noYearSentinel = 1804;
 
 class ContactRepository {
-  /// Stable identifier for an Android account.
   static String accountKey(Account a) {
     return '${a.type ?? ''}|${a.name ?? ''}';
   }
@@ -96,10 +95,11 @@ class ContactRepository {
     return (contacts: otherContacts, meContact: meContact);
   }
 
-  /// Maps a single plugin `Contact` to this app's `Contact` model.
   Contact mapSingleContact(dynamic c) {
     final name = c.displayName;
     final nickname = c.name?.nickname;
+    final familyName = c.name?.last;
+    final givenName = c.name?.first;
     final isMe =
         nickname != null && meStrings.contains(nickname.trim().toLowerCase());
 
@@ -134,6 +134,8 @@ class ContactRepository {
     return Contact(
       id: c.id ?? '',
       name: (name != null && name.isNotEmpty) ? name : 'Unknown Contact',
+      familyName: (familyName != null && familyName.isNotEmpty) ? familyName : null,
+      givenName: (givenName != null && givenName.isNotEmpty) ? givenName : null,
       nickname: nickname,
       status: ' ',
       photo: c.photo?.thumbnail,
@@ -226,8 +228,6 @@ class ContactRepository {
     return url;
   }
 
-  /// Collects URLs from a contact that don't match any messenger label.
-  /// These are the ones shown as "open website" rows in the details page.
   List<String> _mapWebsites(dynamic c) {
     final messengerLabels = <String>[
       ...MessagingAccountTypes.signalMessengerLabels,

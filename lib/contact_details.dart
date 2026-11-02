@@ -33,7 +33,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   final _repository = ContactRepository();
 
   Uint8List? _fullPhoto;
-
   Contact? _fullContact;
 
   @override
@@ -85,8 +84,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     widget.onPopStart?.call();
     Navigator.of(context).pop();
   }
-
-  // ── Launch helpers ────────────────────────────────────────────────
 
   Future<void> _launchUri(Uri uri, String failureMessage) async {
     HapticFeedback.lightImpact();
@@ -188,9 +185,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _showError('No maps app found');
   }
 
-  /// Opens a contact's website URL in the default browser. If the URL
-  /// lacks a scheme (e.g. "example.com"), prepend `https://` so the
-  /// browser handles it correctly.
   void _openWebsite(String rawUrl) {
     var target = rawUrl.trim();
     if (target.isEmpty) {
@@ -242,8 +236,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(uri, 'Telegram not installed');
   }
 
-  // ── Dialogs ──────────────────────────────────────────────────────
-
   void _handleEdit() {
     showDialog(
       context: context,
@@ -267,6 +259,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   }
 
   void _handleDelete() {
+    final displayName = widget.contact
+        .nameFor(widget.settings.surnameFirst.value);
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -282,7 +276,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Permanently delete ${widget.contact.name}?',
+                'Permanently delete $displayName?',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w300,
@@ -331,6 +325,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final c = _fullContact ?? widget.contact;
+    final surnameFirst = widget.settings.surnameFirst.value;
     final accent = (widget.settings.parseNotesForAccentColor.value
         ? c.accentColor
         : null) ??
@@ -438,7 +433,6 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
       ));
     }
 
-    // Non-messenger website URLs, shown as tappable "open website" rows.
     for (final url in c.websites) {
       infoSections.add(FeatherLayer(
         index: assign(),
@@ -523,7 +517,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                             children: [
                               Flexible(
                                 child: Text(
-                                  c.detailsTitle,
+                                  c.detailsTitle(surnameFirst),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -553,7 +547,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: _ProfilePhoto(
-                        name: c.name,
+                        name: c.nameFor(surnameFirst),
                         photo: _fullPhoto ?? c.photo,
                         color: accent,
                       ),
@@ -650,7 +644,6 @@ class _ProfilePhoto extends StatelessWidget {
   }
 }
 
-/// A section with a header (verb + type) and a single value underneath.
 class _InfoSection extends StatelessWidget {
   final String header;
   final String value;
