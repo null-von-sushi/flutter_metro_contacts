@@ -71,9 +71,9 @@ class _SettingsPageState extends State<SettingsPage> {
           final a = raw as Account?;
           if (a == null) continue;
           if (ContactRepository.accountKey(a) == accountId) {
-            accountName = (a.name?.isNotEmpty ?? false)
-                ? a.name!
-                : (a.type ?? accountId);
+            accountName = (a.name.isNotEmpty)
+                ? a.name
+                : (a.type);
             break;
           }
         }
@@ -164,10 +164,10 @@ class _SettingsPageState extends State<SettingsPage> {
             if (raw != null)
               _ChoiceOption<String>(
                 id: ContactRepository.accountKey(raw),
-                label: (raw.name?.isNotEmpty ?? false)
-                    ? raw.name!
-                    : (raw.type ?? 'unknown'),
-                subtitle: raw.type ?? '',
+                label: (raw.name.isNotEmpty)
+                    ? raw.name
+                    : (raw.type),
+                subtitle: raw.type,
               ),
         ],
         currentId: widget.settings.accountFilter.value ?? '__all__',

@@ -8,7 +8,7 @@ const int _noYearSentinel = 1804;
 
 class ContactRepository {
   static String accountKey(Account a) {
-    return '${a.type ?? ''}|${a.name ?? ''}';
+    return '${a.type}|${a.name}';
   }
 
   Future<({List<Contact> contacts, Contact? meContact})> fetchContacts({

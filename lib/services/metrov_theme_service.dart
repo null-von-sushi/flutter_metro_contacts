@@ -36,10 +36,7 @@ class MetrovThemeService {
         return null;
       }
       final color = Color(raw);
-      debugPrint(
-        '[MetroV] accent = '
-            '#${raw.toRadixString(16).padLeft(8, '0').toUpperCase()}',
-      );
+      debugPrint('[MetroV] accent = #${Color(raw).value.toRadixString(16).padLeft(8, '0').toUpperCase()}');
       return color;
     } on PlatformException catch (e) {
       debugPrint('[MetroV] accent query failed: ${e.code} — ${e.message}');
