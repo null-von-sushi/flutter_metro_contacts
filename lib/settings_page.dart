@@ -71,9 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
           final a = raw as Account?;
           if (a == null) continue;
           if (ContactRepository.accountKey(a) == accountId) {
-            accountName = (a.name.isNotEmpty)
-                ? a.name
-                : (a.type);
+            accountName = (a.name.isNotEmpty) ? a.name : (a.type);
             break;
           }
         }
@@ -164,9 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
             if (raw != null)
               _ChoiceOption<String>(
                 id: ContactRepository.accountKey(raw),
-                label: (raw.name.isNotEmpty)
-                    ? raw.name
-                    : (raw.type),
+                label: (raw.name.isNotEmpty) ? raw.name : (raw.type),
                 subtitle: raw.type,
               ),
         ],
@@ -345,14 +341,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
-                        // ── NAMES ───────────────────────────────────
+                        // ── CONTACT LIST FILTER ─────────────────────
                         const FeatherLayer(
                           index: 1,
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                                 horizontal: 16.0, vertical: 8.0),
                             child: Text(
-                              'NAMES',
+                              'CONTACT LIST FILTER',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -364,42 +360,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         FeatherLayer(
                           index: 2,
-                          child: Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: ValueListenableBuilder<bool>(
-                              valueListenable: widget.settings.surnameFirst,
-                              builder: (context, value, _) => WpToggleSwitch(
-                                header: 'Always show surname first',
-                                value: value,
-                                accentColor: AccentColor,
-                                onChanged: (v) =>
-                                widget.settings.surnameFirst.value = v,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ── SHOWING ─────────────────────────────────
-                        const FeatherLayer(
-                          index: 3,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'SHOWING',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
-                        FeatherLayer(
-                          index: 4,
                           child: _FilterRow(
                             label: 'account',
                             value: accountLabel,
@@ -407,7 +367,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         FeatherLayer(
-                          index: 5,
+                          index: 3,
                           child: _FilterRow(
                             label: 'group',
                             value: groupLabel,
@@ -418,23 +378,27 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ── CONTACT DISPLAY ─────────────────────────
-                        const FeatherLayer(
-                          index: 6,
+                        // ── NAMES ───────────────────────────────────
+                        FeatherLayer(
+                          index: 5,
                           child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'CONTACT DISPLAY',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: ValueListenableBuilder<bool>(
+                              valueListenable: widget.settings.surnameFirst,
+                              builder: (context, value, _) => WpToggleSwitch(
+                                header: 'always display last name first',
+                                value: value,
+                                accentColor: AccentColor,
+                                onChanged: (v) =>
+                                widget.settings.surnameFirst.value = v,
                               ),
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+
+                        // ── CONTACT DISPLAY ─────────────────────────
                         FeatherLayer(
                           index: 7,
                           child: Padding(
@@ -444,8 +408,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               valueListenable:
                               widget.settings.prioritizeNicknames,
                               builder: (context, value, _) => WpToggleSwitch(
-                                header:
-                                'Prioritize Nicknames instead of legal names',
+                                header: 'show nicknames large',
                                 value: value,
                                 accentColor: AccentColor,
                                 onChanged: (v) =>
@@ -458,22 +421,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         const SizedBox(height: 16),
 
                         // ── THEMING ─────────────────────────────────
-                        const FeatherLayer(
-                          index: 8,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'THEMING',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
                         FeatherLayer(
                           index: 9,
                           child: Padding(
@@ -483,7 +430,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               valueListenable:
                               widget.settings.parseNotesForAccentColor,
                               builder: (context, value, _) => WpToggleSwitch(
-                                header: 'Parse Notes for Accent Color',
+                                header:
+                                'use favorite color of contact for accent (notes section)',
                                 accentColor: AccentColor,
                                 value: value,
                                 onChanged: (v) => widget
@@ -499,6 +447,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             value: accentName,
                             leadingSwatch: Color(selectedArgb),
                             onTap: _pickAccentColor,
+                            stacked: true,
                           ),
                         ),
                         if (_metroVLauncherInstalled == true)
@@ -515,7 +464,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     widget.settings.useLauncherAccent,
                                     builder: (context, value, _) =>
                                         WpToggleSwitch(
-                                          header: 'Use MetroV launcher accent',
+                                          header: 'use metrov launcher accent',
                                           value: value,
                                           accentColor: AccentColor,
                                           onChanged: (v) => widget
@@ -540,7 +489,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       Expanded(
                                         child: Text(
                                           MetrovAccent == null
-                                              ? 'launcher accent: not read'
+                                              ? 'error getting launcher accent'
                                               : 'launcher accent: '
                                               '${_hexOf(MetrovAccent!)}',
                                           style: const TextStyle(
@@ -596,24 +545,121 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-class _FilterRow extends StatelessWidget {
+class _FilterRow extends StatefulWidget {
   final String label;
   final String value;
   final VoidCallback? onTap;
   final Color? leadingSwatch;
+  final bool stacked;
 
   const _FilterRow({
     required this.label,
     required this.value,
     this.onTap,
     this.leadingSwatch,
+    this.stacked = false,
   });
 
   @override
+  State<_FilterRow> createState() => _FilterRowState();
+}
+
+class _FilterRowState extends State<_FilterRow> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final enabled = onTap != null;
+    final enabled = widget.onTap != null;
+
+    final valueStyle = TextStyle(
+      fontSize: 17,
+      fontWeight: FontWeight.w300,
+      color: enabled ? Colors.white : Colors.white30,
+    );
+    final chevron = Icon(
+      Icons.chevron_right,
+      color: enabled ? Colors.white38 : Colors.white12,
+      size: 20,
+    );
+
+    if (widget.stacked) {
+      final bgColor = _isPressed && enabled ? Colors.white : Colors.black;
+      final borderColor = _isPressed && enabled ? AccentColor : Colors.white;
+      final textColor = _isPressed && enabled
+          ? Colors.black
+          : (enabled ? Colors.white : Colors.white30);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              widget.label,
+              style: const TextStyle(
+                fontSize: 20,
+                height: 1.1,
+                fontWeight: FontWeight.w300,
+                color: Color(0xffa6a6a6),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown:
+              enabled ? (_) => setState(() => _isPressed = true) : null,
+              onTapUp:
+              enabled ? (_) => setState(() => _isPressed = false) : null,
+              onTapCancel:
+              enabled ? () => setState(() => _isPressed = false) : null,
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 50),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  border: Border.all(
+                    color: borderColor,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (widget.leadingSwatch != null) ...[
+                      Container(
+                        width: 16,
+                        height: 16,
+                        color: widget.leadingSwatch,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        widget.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w300,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return InkWell(
-      onTap: onTap,
+      onTap: widget.onTap,
       splashFactory: NoSplash.splashFactory,
       highlightColor: Colors.white.withOpacity(0.06),
       child: Padding(
@@ -623,7 +669,7 @@ class _FilterRow extends StatelessWidget {
             SizedBox(
               width: 116,
               child: Text(
-                label,
+                widget.label,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w400,
@@ -631,31 +677,23 @@ class _FilterRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (leadingSwatch != null) ...[
+            if (widget.leadingSwatch != null) ...[
               Container(
                 width: 16,
                 height: 16,
-                color: leadingSwatch,
+                color: widget.leadingSwatch,
               ),
               const SizedBox(width: 8),
             ],
             Expanded(
               child: Text(
-                value,
+                widget.value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w300,
-                  color: enabled ? Colors.white : Colors.white30,
-                ),
+                style: valueStyle,
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: enabled ? Colors.white38 : Colors.white12,
-              size: 20,
-            ),
+            chevron,
           ],
         ),
       ),
