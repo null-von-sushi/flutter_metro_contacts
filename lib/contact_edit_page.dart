@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
-import 'widgets/photo_crop_page.dart'; // <-- Add this
 import 'package:image_picker/image_picker.dart';
 import 'data/class_contact.dart';
 import 'data/group_query.dart';
@@ -16,6 +15,7 @@ import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
 import 'widgets/wp_picker.dart';
 import 'widgets/wp_confirm_dialog.dart';
+import 'widgets/photo_crop_page.dart';
 
 class ContactEditPage extends StatefulWidget {
   final Contact? contact;
@@ -40,8 +40,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
   bool _loading = false;
   bool _saving = false;
   String? _loadError;
-  bool _photoChanged = false; // <-- Add this
-
+  bool _photoChanged = false;
 
   Uint8List? _pickedPhoto;
 
@@ -61,6 +60,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
   List<NativeGroup> _groups = [];
   String? _selectedGroupId;
+  String? _originalGroupId;
 
   bool get _isEdit => widget.contact != null;
 
@@ -191,10 +191,41 @@ class _ContactEditPageState extends State<ContactEditPage> {
         });
         return;
       }
+
+      // 1. Find the account this contact belongs to
+      String? accountKey;
+      try {
+        final rc = raw.android?.identifiers?.rawContacts ?? [];
+        if (rc.isNotEmpty) {
+          final acc = rc.first.account;
+          if (acc != null) {
+            accountKey = '${acc.type}|${acc.name}';
+          }
+        }
+      } catch (e) {
+        debugPrint('[edit] Failed to parse account: $e');
+      }
+
+      // 2. Find the current group
+      String? currentGroupId;
+      try {
+        // Note: flutter_contacts 2.6.0 does not have a getGroups(contactId) method.
+        // We cannot reliably fetch the current group ID on this device.
+        // We will leave this null, meaning the picker will default to "no address book".
+        currentGroupId = null;
+      } catch (e) {
+        debugPrint('[edit] Failed to parse groups: $e');
+      }
+
       setState(() {
         _rawContact = raw;
+        _selectedAccountKey = accountKey;
+        _originalGroupId = currentGroupId;
+        _selectedGroupId = currentGroupId;
+
         _pickedPhoto = raw.photo?.fullSize ?? raw.photo?.thumbnail;
-        _photoChanged = false; // <-- Reset flag
+        _photoChanged = false;
+
         _nicknameCtrl.text = raw.name?.nickname ?? '';
         _firstCtrl.text = raw.name?.first ?? '';
         _middleCtrl.text = raw.name?.middle ?? '';
@@ -206,6 +237,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
         _addresses = List.of(raw.addresses);
         _loading = false;
       });
+
+      // 3. Load available groups for this account
+      await _reloadGroups();
+
     } catch (e, s) {
       debugPrint('[edit] _load failed: $e\n$s');
       if (!mounted) return;
@@ -229,7 +264,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
       final bytes = await pickedFile.readAsBytes();
       if (!mounted) return;
 
-      // Launch our custom WP-styled cropper
       final croppedBytes = await Navigator.push<Uint8List>(
         context,
         MaterialPageRoute(
@@ -249,8 +283,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
       _showSnack('Failed to pick or crop image');
     }
   }
-
-
 
   Future<void> _save() async {
     if (_saving) return;
@@ -276,8 +308,9 @@ class _ContactEditPageState extends State<ContactEditPage> {
         nickname: nickname.isEmpty ? null : nickname,
       );
 
-      final notes =
-      noteText.isEmpty ? <fc.Note>[] : <fc.Note>[fc.Note(note: noteText)];
+      final notes = noteText.isEmpty ? <fc.Note>[] : <fc.Note>[fc.Note(note: noteText)];
+
+      String contactId = widget.contact?.id ?? '';
 
       if (_isEdit) {
         fc.Photo? newPhoto;
@@ -322,20 +355,37 @@ class _ContactEditPageState extends State<ContactEditPage> {
           notes: notes,
           photo: _pickedPhoto != null ? fc.Photo(thumbnail: _pickedPhoto) : null,
         );
-        final newId = await fc.FlutterContacts.create(
+        contactId = await fc.FlutterContacts.create(
           newContact,
           account: accountToUse,
         );
+      }
 
-        final groupId = _selectedGroupId;
-        if (groupId != null && newId.isNotEmpty) {
+      // ── Handle Group Changes ───────────────────────────────────────
+      if (contactId.isNotEmpty) {
+        // If the group changed in edit mode, remove from the old one
+        if (_isEdit && _originalGroupId != null && _originalGroupId != _selectedGroupId) {
+          try {
+            await fc.FlutterContacts.groups.removeContacts(
+              groupId: _originalGroupId!,
+              contactIds: [contactId],
+            );
+            debugPrint('[edit] removed contact $contactId from group $_originalGroupId');
+          } catch (e, s) {
+            debugPrint('[edit] failed to remove from old group: $e\n$s');
+          }
+        }
+
+        // If a new group is selected, add to it (for both create and edit)
+        if (_selectedGroupId != null && (!_isEdit || _originalGroupId != _selectedGroupId)) {
           try {
             await fc.FlutterContacts.groups.addContacts(
-              groupId: groupId,
-              contactIds: [newId],
+              groupId: _selectedGroupId!,
+              contactIds: [contactId],
             );
+            debugPrint('[edit] added contact $contactId to group $_selectedGroupId');
           } catch (e, s) {
-            debugPrint('[edit] group assignment failed: $e\n$s');
+            debugPrint('[edit] failed to add to new group: $e\n$s');
           }
         }
       }
@@ -343,7 +393,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
       if (!mounted) return;
       widget.onSaved?.call();
       widget.onPopStart?.call();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true); // Return true to signal a change
     } on PlatformException catch (e, s) {
       debugPrint('[edit] save failed: $e\n$s');
       if (!mounted) return;
@@ -448,7 +498,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }
 
   String get _groupPickerValue {
-    if (_selectedGroupId == null) return 'default';
+    if (_selectedGroupId == null) return 'none';
     for (final g in _groups) {
       if (g.id == _selectedGroupId) return g.title;
     }
@@ -502,8 +552,8 @@ class _ContactEditPageState extends State<ContactEditPage> {
     final options = <_WpPickerDialogOption<String>>[
       const _WpPickerDialogOption<String>(
         id: _defaultSentinel,
-        label: 'default',
-        subtitle: 'no address book',
+        label: 'none',
+        subtitle: 'no group assigned',
       ),
       for (final g in _groups)
         _WpPickerDialogOption<String>(
@@ -516,7 +566,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
       context: context,
       barrierColor: Colors.black87,
       builder: (_) => _WpPickerDialog<String>(
-        title: 'address book',
+        title: 'save to group',
         options: options,
         currentId: currentId,
       ),
@@ -714,11 +764,14 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
     sections.add(_buildTextField('Note', _noteCtrl, multiline: true));
 
+    // Account picker — only in create mode
     if (!_isEdit && _accounts.isNotEmpty) {
       sections.add(_buildAccountPicker());
-      if (_groups.isNotEmpty) {
-        sections.add(_buildGroupPicker());
-      }
+    }
+
+    // Group picker — visible in BOTH edit and create mode
+    if (_groups.isNotEmpty) {
+      sections.add(_buildGroupPicker());
     }
 
     return sections;
@@ -756,7 +809,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
 
   Widget _buildGroupPicker() {
     return WpPicker(
-      label: 'address book',
+      label: 'group',
       value: _groupPickerValue,
       onTap: _showGroupPicker,
     );
