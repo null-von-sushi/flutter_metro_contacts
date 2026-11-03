@@ -12,6 +12,7 @@ import 'other/wp_text.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
+import 'widgets/wp_picker.dart';
 
 class ContactEditPage extends StatefulWidget {
   /// `null` for new-contact mode; otherwise the contact being edited.
@@ -422,6 +423,105 @@ class _ContactEditPageState extends State<ContactEditPage> {
     if (ok == true) onConfirm();
   }
 
+  // ── Account / group picker handlers ────────────────────────────────
+
+  /// Sentinel used by the picker dialogs so a "default" selection is
+  /// distinguishable from a cancelled dialog (both would otherwise be
+  /// `null`).
+  static const String _defaultSentinel = '__default__';
+
+  String get _accountPickerValue {
+    if (_selectedAccountKey == null) return 'default';
+    for (final a in _accounts) {
+      if (_accountKeyOf(a) == _selectedAccountKey) {
+        return a.name.isNotEmpty ? '${a.name} (${a.type})' : a.type;
+      }
+    }
+    return _selectedAccountKey!;
+  }
+
+  String get _groupPickerValue {
+    if (_selectedGroupId == null) return 'default';
+    for (final g in _groups) {
+      if (g.id == _selectedGroupId) return g.title;
+    }
+    return _selectedGroupId!;
+  }
+
+  Future<void> _showAccountPicker() async {
+    if (_accounts.isEmpty) return;
+
+    final currentId = _selectedAccountKey ?? _defaultSentinel;
+    final options = <_WpPickerDialogOption<String>>[
+      const _WpPickerDialogOption<String>(
+        id: _defaultSentinel,
+        label: 'default',
+        subtitle: 'system default account',
+      ),
+      for (final a in _accounts)
+        _WpPickerDialogOption<String>(
+          id: _accountKeyOf(a),
+          label: a.name.isNotEmpty ? a.name : a.type,
+          subtitle: a.name.isNotEmpty ? a.type : '',
+        ),
+    ];
+
+    final picked = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _WpPickerDialog<String>(
+        title: 'save to account',
+        options: options,
+        currentId: currentId,
+      ),
+    );
+
+    if (!mounted || picked == null) return;
+    final newKey = picked == _defaultSentinel ? null : picked;
+    if (newKey == _selectedAccountKey) return;
+
+    setState(() {
+      _selectedAccountKey = newKey;
+      _selectedGroupId = null;
+      _groups = [];
+    });
+    await _reloadGroups();
+  }
+
+  Future<void> _showGroupPicker() async {
+    if (_groups.isEmpty) return;
+
+    final currentId = _selectedGroupId ?? _defaultSentinel;
+    final options = <_WpPickerDialogOption<String>>[
+      const _WpPickerDialogOption<String>(
+        id: _defaultSentinel,
+        label: 'default',
+        subtitle: 'no address book',
+      ),
+      for (final g in _groups)
+        _WpPickerDialogOption<String>(
+          id: g.id,
+          label: g.title,
+        ),
+    ];
+
+    final picked = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _WpPickerDialog<String>(
+        title: 'address book',
+        options: options,
+        currentId: currentId,
+      ),
+    );
+
+    if (!mounted || picked == null) return;
+
+    setState(() {
+      _selectedGroupId = picked == _defaultSentinel ? null : picked;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final route = ModalRoute.of(context);
@@ -670,131 +770,18 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }
 
   Widget _buildAccountPicker() {
-    final hasValue = _accounts.any(
-          (a) => _accountKeyOf(a) == _selectedAccountKey,
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            wpLowercase('Save to account'),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: Colors.white54,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: hasValue ? _selectedAccountKey : null,
-              underline: const SizedBox.shrink(),
-              dropdownColor: const Color(0xFF1F1F1F),
-              icon: const Icon(
-                Icons.arrow_drop_down,
-                color: Colors.white54,
-              ),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
-              ),
-              items: [
-                for (final a in _accounts)
-                  DropdownMenuItem<String>(
-                    value: _accountKeyOf(a),
-                    child: Text(
-                      '${a.name} (${a.type})',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: (v) {
-                setState(() {
-                  _selectedAccountKey = v;
-                  // Clear group selection — groups are account-scoped.
-                  _selectedGroupId = null;
-                  _groups = [];
-                });
-                _reloadGroups();
-              },
-            ),
-          ),
-        ],
-      ),
+    return WpPicker(
+      label: 'save to account',
+      value: _accountPickerValue,
+      onTap: _showAccountPicker,
     );
   }
 
   Widget _buildGroupPicker() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            wpLowercase('Address book'),
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-              color: Colors.white54,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: DropdownButton<String?>(
-              isExpanded: true,
-              value: _selectedGroupId,
-              underline: const SizedBox.shrink(),
-              dropdownColor: const Color(0xFF1F1F1F),
-              icon: const Icon(
-                Icons.arrow_drop_down,
-                color: Colors.white54,
-              ),
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text(
-                    'default',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-                for (final g in _groups)
-                  DropdownMenuItem<String?>(
-                    value: g.id,
-                    child: Text(
-                      g.title,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _selectedGroupId = v),
-            ),
-          ),
-        ],
-      ),
+    return WpPicker(
+      label: 'address book',
+      value: _groupPickerValue,
+      onTap: _showGroupPicker,
     );
   }
 
@@ -1425,6 +1412,126 @@ class _ConfirmRemoveDialog extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── WpPicker-style modal choice dialog ──────────────────────────────
+
+class _WpPickerDialogOption<T> {
+  final T id;
+  final String label;
+  final String subtitle;
+
+  const _WpPickerDialogOption({
+    required this.id,
+    required this.label,
+    this.subtitle = '',
+  });
+}
+
+class _WpPickerDialog<T> extends StatelessWidget {
+  final String title;
+  final List<_WpPickerDialogOption<T>> options;
+  final T currentId;
+
+  const _WpPickerDialog({
+    required this.title,
+    required this.options,
+    required this.currentId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1F1F1F),
+      elevation: 0,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              wpLowercase(title),
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w300,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: options.length,
+              itemBuilder: (context, index) {
+                final opt = options[index];
+                final selected = opt.id == currentId;
+                return InkWell(
+                  onTap: () => Navigator.pop<T>(context, opt.id),
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.white.withOpacity(0.06),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          selected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          size: 20,
+                          color: selected ? AccentColor : Colors.white38,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                opt.label,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w300,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              if (opt.subtitle.isNotEmpty)
+                                Text(
+                                  opt.subtitle,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                WpButton(
+                  label: 'cancel',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
