@@ -342,38 +342,24 @@ class _SettingsPageState extends State<SettingsPage> {
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
                         // ── CONTACT LIST FILTER ─────────────────────
-                        const FeatherLayer(
-                          index: 1,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'CONTACT LIST FILTER',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
                         FeatherLayer(
                           index: 2,
                           child: _FilterRow(
-                            label: 'account',
+                            label: 'only show account',
                             value: accountLabel,
                             onTap: _pickAccount,
+                            stacked: true,
                           ),
                         ),
                         FeatherLayer(
                           index: 3,
                           child: _FilterRow(
-                            label: 'group',
+                            label: 'only show group',
                             value: groupLabel,
                             onTap: widget.settings.accountFilter.value != null
                                 ? _pickGroup
                                 : null,
+                            stacked: true,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -589,12 +575,12 @@ class _FilterRowState extends State<_FilterRow> {
           ? Colors.black
           : (enabled ? Colors.white : Colors.white30);
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
               widget.label,
               style: const TextStyle(
                 fontSize: 20,
@@ -603,11 +589,8 @@ class _FilterRowState extends State<_FilterRow> {
                 color: Color(0xffa6a6a6),
               ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: GestureDetector(
+            const SizedBox(height: 6),
+            GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapDown:
               enabled ? (_) => setState(() => _isPressed = true) : null,
@@ -619,7 +602,7 @@ class _FilterRowState extends State<_FilterRow> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 50),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 12.0, vertical: 12.0),
+                    horizontal: 12.0, vertical: 8.0),
                 decoration: BoxDecoration(
                   color: bgColor,
                   border: Border.all(
@@ -653,8 +636,8 @@ class _FilterRowState extends State<_FilterRow> {
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
 
