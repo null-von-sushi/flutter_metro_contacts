@@ -13,6 +13,7 @@ import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
 import 'widgets/wp_button.dart';
 import 'widgets/wp_picker.dart';
+import 'widgets/wp_confirm_dialog.dart';
 
 class ContactEditPage extends StatefulWidget {
   /// `null` for new-contact mode; otherwise the contact being edited.
@@ -417,8 +418,15 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }) async {
     final ok = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black87,
-      builder: (_) => _ConfirmRemoveDialog(label: label),
+      barrierColor: Colors.black54,
+      builder: (context) => WpConfirmDialog(
+        title: 'Remove "$label"?',
+        confirmLabel: 'remove',
+        cancelLabel: 'cancel',
+        dangerous: true,
+        onCancel: () => Navigator.of(context).pop(false),
+        onConfirm: () => Navigator.of(context).pop(true),
+      ),
     );
     if (ok == true) onConfirm();
   }
@@ -1360,57 +1368,6 @@ class _TypeChip extends StatelessWidget {
             fontSize: 14,
             color: selected ? Colors.white : Colors.white70,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConfirmRemoveDialog extends StatelessWidget {
-  final String label;
-
-  const _ConfirmRemoveDialog({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: const Color(0xFF1F1F1F),
-      elevation: 0,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Remove "$label"?',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
-                height: 1.3,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                WpButton(
-                  label: 'cancel',
-                  onPressed: () => Navigator.of(context).pop(false),
-                ),
-                const SizedBox(width: 12),
-                WpButton(
-                  label: 'remove',
-                  pressedColor: Colors.red.shade700,
-                  onPressed: () => Navigator.of(context).pop(true),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

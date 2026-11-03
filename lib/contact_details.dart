@@ -10,7 +10,7 @@ import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
-import 'widgets/wp_button.dart';
+import 'widgets/wp_confirm_dialog.dart';
 import 'other/wp_text.dart';
 import 'contact_edit_page.dart';
 
@@ -265,49 +265,17 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         .nameFor(widget.settings.surnameFirst.value);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Permanently delete $displayName?',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  WpButton(
-                    label: 'cancel',
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 12),
-                  WpButton(
-                    label: 'delete',
-                    pressedColor: Colors.red.shade700,
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // TODO: call FlutterContacts.delete(widget.contact.id).
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      barrierColor: Colors.black54,
+      builder: (context) => WpConfirmDialog(
+        title: '\nPermanently delete $displayName?',
+        confirmLabel: 'delete',
+        cancelLabel: 'cancel',
+        dangerous: true,
+        onCancel: () => Navigator.pop(context),
+        onConfirm: () {
+          Navigator.pop(context);
+          // TODO: call FlutterContacts.delete(widget.contact.id).
+        },
       ),
     );
   }

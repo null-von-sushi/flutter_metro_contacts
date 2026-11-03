@@ -46,12 +46,14 @@ class _WpButtonState extends State<WpButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         padding: widget.padding,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: fill,
           border: Border.all(color: foreground, width: widget.borderWidth),
         ),
         child: Text(
           widget.label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: foreground,
             fontSize: widget.fontSize,
