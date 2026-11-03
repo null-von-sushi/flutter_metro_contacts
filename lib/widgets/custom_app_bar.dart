@@ -176,75 +176,79 @@ class _WpApplicationBarState extends State<WpApplicationBar>
             final showMenu = _hasMenu &&
                 (t > 0 || _expand.status != AnimationStatus.dismissed);
 
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                SizedBox(
-                  height: actionHeight,
-                  child: _CommandRow(
-                    actions: widget.actions,
-                    canExpand: _canExpand,
-                    expanded: t > 0,
-                    menuOpen: _menuOpen,
+            return Padding(
+              // ▼▼▼ ADDED PADDING HERE TO RAISE THE WHOLE BAR ▼▼▼
+              padding: const EdgeInsets.only(bottom: 10.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  SizedBox(
                     height: actionHeight,
-                    foregroundColor: widget.foregroundColor,
-                    disabledColor: widget.disabledColor,
-                    reducedMotion: _reducedMotion(context),
-                    onToggleMenu: _toggleMenu,
+                    child: _CommandRow(
+                      actions: widget.actions,
+                      canExpand: _canExpand,
+                      expanded: t > 0,
+                      menuOpen: _menuOpen,
+                      height: actionHeight,
+                      foregroundColor: widget.foregroundColor,
+                      disabledColor: widget.disabledColor,
+                      reducedMotion: _reducedMotion(context),
+                      onToggleMenu: _toggleMenu,
+                    ),
                   ),
-                ),
-                if (showMenu)
-                  ClipRect(
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      heightFactor: t,
-                      child: SizedBox(
-                        height: menuMax,
-                        child: ColoredBox(
-                          color: menuColor,
-                          child: ListView.builder(
-                            padding: EdgeInsets.zero,
-                            itemCount: widget.menuItems.length,
-                            itemBuilder: (context, index) {
-                              final item = widget.menuItems[index];
-                              return _ApplicationBarButton(
-                                label: item.label,
-                                onPressed: item.onPressed == null
-                                    ? null
-                                    : () {
-                                  _setMenuOpen(false);
-                                  item.onPressed!();
-                                },
-                                foregroundColor: widget.foregroundColor,
-                                disabledColor: widget.disabledColor,
-                                reducedMotion: _reducedMotion(context),
-                                height: menuItemHeight,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      item.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontFamily:
-                                        'packages/wp_pivot_flutter/Selawik',
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w300,
+                  if (showMenu)
+                    ClipRect(
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        heightFactor: t,
+                        child: SizedBox(
+                          height: menuMax,
+                          child: ColoredBox(
+                            color: menuColor,
+                            child: ListView.builder(
+                              padding: EdgeInsets.zero,
+                              itemCount: widget.menuItems.length,
+                              itemBuilder: (context, index) {
+                                final item = widget.menuItems[index];
+                                return _ApplicationBarButton(
+                                  label: item.label,
+                                  onPressed: item.onPressed == null
+                                      ? null
+                                      : () {
+                                    _setMenuOpen(false);
+                                    item.onPressed!();
+                                  },
+                                  foregroundColor: widget.foregroundColor,
+                                  disabledColor: widget.disabledColor,
+                                  reducedMotion: _reducedMotion(context),
+                                  height: menuItemHeight,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        item.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontFamily:
+                                          'packages/wp_pivot_flutter/Selawik',
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w300,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             );
           },
         ),
@@ -405,7 +409,7 @@ class _ActionContents extends StatelessWidget {
       fit: StackFit.expand,
       children: <Widget>[
         Positioned(
-          top: 12,
+          top: 17,
           left: 0,
           right: 0,
           child: Center(
@@ -418,7 +422,7 @@ class _ActionContents extends StatelessWidget {
         Positioned(
           left: 2,
           right: 2,
-          bottom: 35,
+          bottom: 27,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
