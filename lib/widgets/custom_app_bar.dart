@@ -418,7 +418,7 @@ class _ActionContents extends StatelessWidget {
         Positioned(
           left: 2,
           right: 2,
-          bottom: 17,
+          bottom: 35,
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
