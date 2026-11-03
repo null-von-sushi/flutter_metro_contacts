@@ -47,6 +47,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
   List<fc.Phone> _phones = [];
   List<fc.Email> _emails = [];
   List<fc.Website> _websites = [];
+  List<fc.Address> _addresses = [];
 
   /// All accounts, unfiltered. If a write fails because the account is
   /// read-only, the PlatformException is surfaced in a snackbar.
@@ -190,6 +191,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
           fc.ContactProperty.phone,
           fc.ContactProperty.email,
           fc.ContactProperty.website,
+          fc.ContactProperty.address,
           fc.ContactProperty.note,
           fc.ContactProperty.identifiers,
         },
@@ -212,6 +214,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
         _phones = List.of(raw.phones);
         _emails = List.of(raw.emails);
         _websites = List.of(raw.websites);
+        _addresses = List.of(raw.addresses);
         _loading = false;
       });
     } catch (e, s) {
@@ -257,6 +260,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
           phones: _phones,
           emails: _emails,
           websites: _websites,
+          addresses: _addresses,
           notes: notes,
         );
         debugPrint('[edit] updating contact ${widget.contact!.id}');
@@ -277,6 +281,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
           phones: _phones,
           emails: _emails,
           websites: _websites,
+          addresses: _addresses,
           notes: notes,
         );
         debugPrint(
@@ -284,7 +289,8 @@ class _ContactEditPageState extends State<ContactEditPage> {
               'name(first=${name.first},last=${name.last},nick=${name.nickname}) '
               'account=${accountToUse == null ? "default" : _accountKeyOf(accountToUse)} '
               'phones=${_phones.length} emails=${_emails.length} '
-              'websites=${_websites.length} notes=${notes.length}',
+              'websites=${_websites.length} addresses=${_addresses.length} '
+              'notes=${notes.length}',
         );
         final newId = await fc.FlutterContacts.create(
           newContact,
@@ -393,6 +399,15 @@ class _ContactEditPageState extends State<ContactEditPage> {
     if (url != null && url.isNotEmpty) {
       setState(() => _websites.add(fc.Website(url: url)));
     }
+  }
+
+  Future<void> _addAddress() async {
+    final a = await showDialog<fc.Address>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => const _AddAddressDialog(),
+    );
+    if (a != null) setState(() => _addresses.add(a));
   }
 
   Future<void> _confirmRemove({
@@ -589,6 +604,24 @@ class _ContactEditPageState extends State<ContactEditPage> {
     sections.add(_AddButton(
       label: 'website',
       onTap: _addWebsite,
+      accentColor: accent,
+    ));
+
+    for (var i = 0; i < _addresses.length; i++) {
+      final a = _addresses[i];
+      sections.add(_InfoSection(
+        header: 'address (${_labelName(a.label)})',
+        value: _formatAddress(a),
+        accentColor: accent,
+        onTap: () => _confirmRemove(
+          label: _formatAddress(a),
+          onConfirm: () => setState(() => _addresses.removeAt(i)),
+        ),
+      ));
+    }
+    sections.add(_AddButton(
+      label: 'address',
+      onTap: _addAddress,
       accentColor: accent,
     ));
 
@@ -790,6 +823,23 @@ class _ContactEditPageState extends State<ContactEditPage> {
         ],
       ),
     );
+  }
+
+  String _formatAddress(fc.Address a) {
+    // First choice: the platform-provided formatted string.
+    if (a.formatted != null && a.formatted!.isNotEmpty) {
+      return a.formatted!;
+    }
+    // Fallback: join whatever parts exist with commas.
+    return [
+      a.street,
+      a.city,
+      a.state,
+      a.postalCode,
+      a.country,
+    ]
+        .where((s) => s != null && s.isNotEmpty)
+        .join(', ');
   }
 
   String _labelName(dynamic label) {
@@ -1100,6 +1150,79 @@ class _AddTextDialogState extends State<_AddTextDialog> {
         final v = _ctrl.text.trim();
         if (v.isEmpty) return;
         Navigator.of(context).pop(v);
+      },
+    );
+  }
+}
+
+class _AddAddressDialog extends StatefulWidget {
+  const _AddAddressDialog();
+
+  @override
+  State<_AddAddressDialog> createState() => _AddAddressDialogState();
+}
+
+class _AddAddressDialogState extends State<_AddAddressDialog> {
+  final _textCtrl = TextEditingController();
+  fc.AddressLabel _label = fc.AddressLabel.home;
+
+  static const _labels = [
+    fc.AddressLabel.home,
+    fc.AddressLabel.work,
+    fc.AddressLabel.other,
+  ];
+
+  @override
+  void dispose() {
+    _textCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _EditDialogScaffold(
+      title: 'Add address',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final l in _labels)
+                _TypeChip(
+                  label: _enumName(l),
+                  selected: _label == l,
+                  onTap: () => setState(() => _label = l),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DialogTextField(
+            controller: _textCtrl,
+            hint: 'Street, City, Postcode, Country...',
+            autofocus: true,
+            multiline: true,
+          ),
+        ],
+      ),
+      onCancel: () => Navigator.of(context).pop(),
+      onSave: () {
+        final text = _textCtrl.text.trim();
+        if (text.isEmpty) return;
+
+        // Store the whole text block in both `street` (Android's catch-all
+        // field) and `formatted` (the standard display string). Native
+        // Apps that expect structured data will just see it as one long
+        // street, which is the most graceful fallback.
+        Navigator.of(context).pop(
+          fc.Address(
+            street: text,
+            formatted: text,
+            label: fc.Label<fc.AddressLabel>(_label),
+          ),
+        );
       },
     );
   }
