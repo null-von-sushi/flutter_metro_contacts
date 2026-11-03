@@ -9,6 +9,7 @@ import 'other/constants.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/wp_button.dart';
+import 'widgets/wp_picker.dart';
 
 const _packageCheckChannel = MethodChannel(
   'com.example.flutter_metro_contacts/package_check',
@@ -344,22 +345,20 @@ class _SettingsPageState extends State<SettingsPage> {
                         // ── CONTACT LIST FILTER ─────────────────────
                         FeatherLayer(
                           index: 2,
-                          child: _FilterRow(
+                          child: WpPicker(
                             label: 'only show account',
                             value: accountLabel,
                             onTap: _pickAccount,
-                            stacked: true,
                           ),
                         ),
                         FeatherLayer(
                           index: 3,
-                          child: _FilterRow(
+                          child: WpPicker(
                             label: 'only show group',
                             value: groupLabel,
                             onTap: widget.settings.accountFilter.value != null
                                 ? _pickGroup
                                 : null,
-                            stacked: true,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -428,12 +427,11 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         FeatherLayer(
                           index: 10,
-                          child: _FilterRow(
+                          child: WpPicker(
                             label: 'accent colour',
                             value: accentName,
                             leadingSwatch: Color(selectedArgb),
                             onTap: _pickAccentColor,
-                            stacked: true,
                           ),
                         ),
                         if (_metroVLauncherInstalled == true)
@@ -524,159 +522,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterRow extends StatefulWidget {
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-  final Color? leadingSwatch;
-  final bool stacked;
-
-  const _FilterRow({
-    required this.label,
-    required this.value,
-    this.onTap,
-    this.leadingSwatch,
-    this.stacked = false,
-  });
-
-  @override
-  State<_FilterRow> createState() => _FilterRowState();
-}
-
-class _FilterRowState extends State<_FilterRow> {
-  bool _isPressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onTap != null;
-
-    final valueStyle = TextStyle(
-      fontSize: 17,
-      fontWeight: FontWeight.w300,
-      color: enabled ? Colors.white : Colors.white30,
-    );
-    final chevron = Icon(
-      Icons.chevron_right,
-      color: enabled ? Colors.white38 : Colors.white12,
-      size: 20,
-    );
-
-    if (widget.stacked) {
-      final bgColor = _isPressed && enabled ? Colors.white : Colors.black;
-      final borderColor = _isPressed && enabled ? AccentColor : Colors.white;
-      final textColor = _isPressed && enabled
-          ? Colors.black
-          : (enabled ? Colors.white : Colors.white30);
-
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.label,
-              style: const TextStyle(
-                fontSize: 20,
-                height: 1.1,
-                fontWeight: FontWeight.w300,
-                color: Color(0xffa6a6a6),
-              ),
-            ),
-            const SizedBox(height: 6),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown:
-              enabled ? (_) => setState(() => _isPressed = true) : null,
-              onTapUp:
-              enabled ? (_) => setState(() => _isPressed = false) : null,
-              onTapCancel:
-              enabled ? () => setState(() => _isPressed = false) : null,
-              onTap: widget.onTap,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 50),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12.0, vertical: 8.0),
-                decoration: BoxDecoration(
-                  color: bgColor,
-                  border: Border.all(
-                    color: borderColor,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    if (widget.leadingSwatch != null) ...[
-                      Container(
-                        width: 16,
-                        height: 16,
-                        color: widget.leadingSwatch,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: Text(
-                        widget.value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w300,
-                          color: textColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: widget.onTap,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.white.withOpacity(0.06),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: Text(
-                widget.label,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-            if (widget.leadingSwatch != null) ...[
-              Container(
-                width: 16,
-                height: 16,
-                color: widget.leadingSwatch,
-              ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                widget.value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: valueStyle,
-              ),
-            ),
-            chevron,
           ],
         ),
       ),
