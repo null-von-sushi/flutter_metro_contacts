@@ -183,9 +183,11 @@ class _PeoplePageState extends State<PeoplePage>
     );
   }
 
-  void _openDetails(Contact contact) {
+  Future<void> _openDetails(Contact contact) async {
     _exitController.forward();
-    Navigator.of(context).push(
+
+    // Note: Removed <bool> here
+    final changed = await Navigator.of(context).push(
       WpPhonePageRoute(
         incomingMaxIndex: contact.detailsMaxIndex,
         outgoingMaxIndex: _homeMaxIndex,
@@ -196,6 +198,12 @@ class _PeoplePageState extends State<PeoplePage>
         ),
       ),
     );
+
+    if (changed == true && mounted) {
+      setState(() {
+        _allPivotFuture = _fetchFiltered();
+      });
+    }
   }
 
   void _addNewContact() {

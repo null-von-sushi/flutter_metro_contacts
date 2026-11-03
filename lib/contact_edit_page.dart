@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' as fc;
+import 'widgets/photo_crop_page.dart'; // <-- Add this
+import 'package:image_picker/image_picker.dart';
 import 'data/class_contact.dart';
 import 'data/group_query.dart';
 import 'other/accent_color.dart';
@@ -16,7 +18,6 @@ import 'widgets/wp_picker.dart';
 import 'widgets/wp_confirm_dialog.dart';
 
 class ContactEditPage extends StatefulWidget {
-  /// `null` for new-contact mode; otherwise the contact being edited.
   final Contact? contact;
   final Settings settings;
   final VoidCallback? onPopStart;
@@ -39,6 +40,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
   bool _loading = false;
   bool _saving = false;
   String? _loadError;
+  bool _photoChanged = false; // <-- Add this
+
+
+  Uint8List? _pickedPhoto;
 
   final _nicknameCtrl = TextEditingController();
   final _firstCtrl = TextEditingController();
@@ -51,14 +56,9 @@ class _ContactEditPageState extends State<ContactEditPage> {
   List<fc.Website> _websites = [];
   List<fc.Address> _addresses = [];
 
-  /// All accounts, unfiltered. If a write fails because the account is
-  /// read-only, the PlatformException is surfaced in a snackbar.
   List<fc.Account> _accounts = [];
   String? _selectedAccountKey;
 
-  /// Groups (which DAVx5 exposes as address books) belonging to the
-  /// currently selected account. Fetched via the native query because
-  /// `FlutterContacts.groups.getAll()` returns empty on this device.
   List<NativeGroup> _groups = [];
   String? _selectedGroupId;
 
@@ -106,12 +106,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
           defaultAccount,
         );
       });
-      debugPrint(
-        '[edit] loaded ${accounts.length} account(s): '
-            '${accounts.map((a) => _accountKeyOf(a)).toList()}, '
-            'selected=$_selectedAccountKey',
-      );
-
       await _reloadGroups();
     } catch (e, s) {
       debugPrint('[edit] _loadAccounts failed: $e\n$s');
@@ -143,10 +137,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
     return _accountKeyOf(accounts.first);
   }
 
-  /// Reloads groups for the currently selected account. Groups are what
-  /// DAVx5 calls address books. The native query is used because
-  /// `FlutterContacts.groups.getAll()` returns an empty list on some
-  /// devices (see `GroupQuery`).
   Future<void> _reloadGroups() async {
     final key = _selectedAccountKey;
     if (key == null) {
@@ -164,16 +154,11 @@ class _ContactEditPageState extends State<ContactEditPage> {
       if (!mounted) return;
       setState(() {
         _groups = filtered;
-        // Drop stale selection if the group no longer exists.
         if (_selectedGroupId != null &&
             !filtered.any((g) => g.id == _selectedGroupId)) {
           _selectedGroupId = null;
         }
       });
-      debugPrint(
-        '[edit] loaded ${filtered.length} group(s) for $key: '
-            '${filtered.map((g) => g.title).toList()}',
-      );
     } catch (e, s) {
       debugPrint('[edit] _reloadGroups failed: $e\n$s');
     }
@@ -189,7 +174,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
         widget.contact!.id,
         properties: {
           fc.ContactProperty.name,
-          fc.ContactProperty.photoThumbnail,
+          fc.ContactProperty.photoFullRes,
           fc.ContactProperty.phone,
           fc.ContactProperty.email,
           fc.ContactProperty.website,
@@ -208,6 +193,8 @@ class _ContactEditPageState extends State<ContactEditPage> {
       }
       setState(() {
         _rawContact = raw;
+        _pickedPhoto = raw.photo?.fullSize ?? raw.photo?.thumbnail;
+        _photoChanged = false; // <-- Reset flag
         _nicknameCtrl.text = raw.name?.nickname ?? '';
         _firstCtrl.text = raw.name?.first ?? '';
         _middleCtrl.text = raw.name?.middle ?? '';
@@ -228,6 +215,42 @@ class _ContactEditPageState extends State<ContactEditPage> {
       });
     }
   }
+
+  Future<void> _pickPhoto() async {
+    final picker = ImagePicker();
+    try {
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      if (pickedFile == null) return;
+
+      final bytes = await pickedFile.readAsBytes();
+      if (!mounted) return;
+
+      // Launch our custom WP-styled cropper
+      final croppedBytes = await Navigator.push<Uint8List>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PhotoCropPage(imageBytes: bytes),
+          fullscreenDialog: true,
+        ),
+      );
+
+      if (croppedBytes != null && mounted) {
+        setState(() {
+          _pickedPhoto = croppedBytes;
+          _photoChanged = true;
+        });
+      }
+    } catch (e, s) {
+      debugPrint('[edit] _pickPhoto failed: $e\n$s');
+      _showSnack('Failed to pick or crop image');
+    }
+  }
+
+
 
   Future<void> _save() async {
     if (_saving) return;
@@ -257,6 +280,17 @@ class _ContactEditPageState extends State<ContactEditPage> {
       noteText.isEmpty ? <fc.Note>[] : <fc.Note>[fc.Note(note: noteText)];
 
       if (_isEdit) {
+        fc.Photo? newPhoto;
+        bool clearPhoto = false;
+
+        if (_photoChanged) {
+          if (_pickedPhoto != null) {
+            newPhoto = fc.Photo(thumbnail: _pickedPhoto);
+          } else {
+            clearPhoto = true;
+          }
+        }
+
         final updated = _rawContact!.copyWith(
           name: name,
           phones: _phones,
@@ -264,10 +298,11 @@ class _ContactEditPageState extends State<ContactEditPage> {
           websites: _websites,
           addresses: _addresses,
           notes: notes,
+          photo: newPhoto,
+          clearPhoto: clearPhoto,
         );
-        debugPrint('[edit] updating contact ${widget.contact!.id}');
+
         await fc.FlutterContacts.update(updated);
-        debugPrint('[edit] update ok');
       } else {
         fc.Account? accountToUse;
         if (_selectedAccountKey != null) {
@@ -285,24 +320,13 @@ class _ContactEditPageState extends State<ContactEditPage> {
           websites: _websites,
           addresses: _addresses,
           notes: notes,
-        );
-        debugPrint(
-          '[edit] creating contact '
-              'name(first=${name.first},last=${name.last},nick=${name.nickname}) '
-              'account=${accountToUse == null ? "default" : _accountKeyOf(accountToUse)} '
-              'phones=${_phones.length} emails=${_emails.length} '
-              'websites=${_websites.length} addresses=${_addresses.length} '
-              'notes=${notes.length}',
+          photo: _pickedPhoto != null ? fc.Photo(thumbnail: _pickedPhoto) : null,
         );
         final newId = await fc.FlutterContacts.create(
           newContact,
           account: accountToUse,
         );
-        debugPrint('[edit] create ok, id=$newId');
 
-        // If a group was picked, add the freshly-created contact to it.
-        // Errors are logged but don't abort — the contact itself was
-        // already created successfully at this point.
         final groupId = _selectedGroupId;
         if (groupId != null && newId.isNotEmpty) {
           try {
@@ -310,42 +334,23 @@ class _ContactEditPageState extends State<ContactEditPage> {
               groupId: groupId,
               contactIds: [newId],
             );
-            debugPrint('[edit] added contact $newId to group $groupId');
           } catch (e, s) {
-            debugPrint(
-              '[edit] group assignment failed (contact still created): '
-                  '$e\n$s',
-            );
+            debugPrint('[edit] group assignment failed: $e\n$s');
           }
         }
       }
 
       if (!mounted) return;
-
-      try {
-        widget.onSaved?.call();
-      } catch (e, s) {
-        debugPrint(
-          '[edit] onSaved callback threw (save still succeeded): $e\n$s',
-        );
-      }
-
+      widget.onSaved?.call();
       widget.onPopStart?.call();
       Navigator.of(context).pop();
     } on PlatformException catch (e, s) {
-      debugPrint('[edit] save failed (PlatformException): '
-          'code=${e.code} message=${e.message}\n$s');
+      debugPrint('[edit] save failed: $e\n$s');
       if (!mounted) return;
       setState(() => _saving = false);
-      if (e.code == 'read_only_contact') {
-        _showSnack(
-          'This account is read-only. Pick a different one, or open '
-              'the system Contacts app to save there.',
-          seconds: 6,
-        );
-      } else {
-        _showSnack('Save failed: ${e.code} — ${e.message}', seconds: 6);
-      }
+      _showSnack(e.code == 'read_only_contact'
+          ? 'This account is read-only. Pick a different one.'
+          : 'Save failed: ${e.code} — ${e.message}', seconds: 6);
     } catch (e, s) {
       debugPrint('[edit] save failed: $e\n$s');
       if (!mounted) return;
@@ -364,8 +369,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF1F1F1F),
-        content: Text(message,
-            style: const TextStyle(color: Colors.white)),
+        content: Text(message, style: const TextStyle(color: Colors.white)),
         duration: Duration(seconds: seconds),
       ),
     );
@@ -431,11 +435,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
     if (ok == true) onConfirm();
   }
 
-  // ── Account / group picker handlers ────────────────────────────────
-
-  /// Sentinel used by the picker dialogs so a "default" selection is
-  /// distinguishable from a cancelled dialog (both would otherwise be
-  /// `null`).
   static const String _defaultSentinel = '__default__';
 
   String get _accountPickerValue {
@@ -580,8 +579,9 @@ class _ContactEditPageState extends State<ContactEditPage> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       child: _PhotoPlaceholder(
-                        photo: _rawContact?.photo?.thumbnail,
+                        photo: _pickedPhoto,
                         accent: accent,
+                        onTap: _pickPhoto,
                       ),
                     ),
                   ),
@@ -603,13 +603,11 @@ class _ContactEditPageState extends State<ContactEditPage> {
                           ? Center(
                         child: Text(
                           'Error: $_loadError',
-                          style: const TextStyle(
-                              color: Colors.white70),
+                          style: const TextStyle(color: Colors.white70),
                         ),
                       )
                           : ListView(
-                        padding:
-                        const EdgeInsets.only(bottom: 32),
+                        padding: const EdgeInsets.only(bottom: 32),
                         children: _buildForm(accent),
                       ),
                     ),
@@ -651,9 +649,6 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }
 
   List<Widget> _buildForm(Color accent) {
-    // Note: no Display Name field. FlutterContacts ignores the value on
-    // create/update — Android recomposes DISPLAY_NAME_PRIMARY from the
-    // structured name parts — so editing it would be misleading.
     final sections = <Widget>[
       _buildTextField('Nickname', _nicknameCtrl),
       _buildTextField('First Name', _firstCtrl),
@@ -673,11 +668,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
         ),
       ));
     }
-    sections.add(_AddButton(
-      label: 'phone',
-      onTap: _addPhone,
-      accentColor: accent,
-    ));
+    sections.add(_AddButton(label: 'phone', onTap: _addPhone, accentColor: accent));
 
     for (var i = 0; i < _emails.length; i++) {
       final e = _emails[i];
@@ -691,11 +682,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
         ),
       ));
     }
-    sections.add(_AddButton(
-      label: 'email',
-      onTap: _addEmail,
-      accentColor: accent,
-    ));
+    sections.add(_AddButton(label: 'email', onTap: _addEmail, accentColor: accent));
 
     for (var i = 0; i < _websites.length; i++) {
       final w = _websites[i];
@@ -709,11 +696,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
         ),
       ));
     }
-    sections.add(_AddButton(
-      label: 'website',
-      onTap: _addWebsite,
-      accentColor: accent,
-    ));
+    sections.add(_AddButton(label: 'website', onTap: _addWebsite, accentColor: accent));
 
     for (var i = 0; i < _addresses.length; i++) {
       final a = _addresses[i];
@@ -727,17 +710,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
         ),
       ));
     }
-    sections.add(_AddButton(
-      label: 'address',
-      onTap: _addAddress,
-      accentColor: accent,
-    ));
+    sections.add(_AddButton(label: 'address', onTap: _addAddress, accentColor: accent));
 
     sections.add(_buildTextField('Note', _noteCtrl, multiline: true));
 
-    // Account picker — only in create mode (FlutterContacts.update has no
-    // account parameter, so an existing contact can't be moved between
-    // accounts through this form).
     if (!_isEdit && _accounts.isNotEmpty) {
       sections.add(_buildAccountPicker());
       if (_groups.isNotEmpty) {
@@ -748,11 +724,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
     return sections;
   }
 
-  Widget _buildTextField(
-      String label,
-      TextEditingController ctrl, {
-        bool multiline = false,
-      }) {
+  Widget _buildTextField(String label, TextEditingController ctrl, {bool multiline = false}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
@@ -768,10 +740,7 @@ class _ContactEditPageState extends State<ContactEditPage> {
             ),
           ),
           const SizedBox(height: 4),
-          _WpTextField(
-            controller: ctrl,
-            multiline: multiline,
-          ),
+          _WpTextField(controller: ctrl, multiline: multiline),
         ],
       ),
     );
@@ -794,18 +763,10 @@ class _ContactEditPageState extends State<ContactEditPage> {
   }
 
   String _formatAddress(fc.Address a) {
-    // First choice: the platform-provided formatted string.
     if (a.formatted != null && a.formatted!.isNotEmpty) {
       return a.formatted!;
     }
-    // Fallback: join whatever parts exist with commas.
-    return [
-      a.street,
-      a.city,
-      a.state,
-      a.postalCode,
-      a.country,
-    ]
+    return [a.street, a.city, a.state, a.postalCode, a.country]
         .where((s) => s != null && s.isNotEmpty)
         .join(', ');
   }
@@ -877,13 +838,8 @@ class _WpTextFieldState extends State<_WpTextField> {
       decoration: InputDecoration(
         isDense: true,
         hintText: widget.hint,
-        hintStyle: TextStyle(
-          color: _hasFocus ? Colors.black54 : Colors.white38,
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 12,
-        ),
+        hintStyle: TextStyle(color: _hasFocus ? Colors.black54 : Colors.white38),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         filled: true,
         fillColor: _hasFocus ? Colors.white : Colors.white.withOpacity(0.04),
         enabledBorder: const OutlineInputBorder(
@@ -906,28 +862,50 @@ class _WpTextFieldState extends State<_WpTextField> {
 class _PhotoPlaceholder extends StatelessWidget {
   final Uint8List? photo;
   final Color accent;
+  final VoidCallback onTap;
 
-  const _PhotoPlaceholder({required this.photo, required this.accent});
+  const _PhotoPlaceholder({
+    required this.photo,
+    required this.accent,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
-        width: 160,
-        height: 160,
-        clipBehavior: Clip.hardEdge,
-        decoration: BoxDecoration(color: accent),
-        child: photo != null
-            ? Image.memory(
-          photo!,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
           width: 160,
           height: 160,
-          fit: BoxFit.cover,
-          cacheWidth: 480,
-          cacheHeight: 480,
-        )
-            : null,
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(color: accent),
+          child: photo != null
+              ? Image.memory(
+            photo!,
+            width: 160,
+            height: 160,
+            fit: BoxFit.cover,
+            cacheWidth: 480,
+            cacheHeight: 480,
+          )
+              : Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: Text(
+                'add\nphoto',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1007,11 +985,7 @@ class _AddButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(
-              Icons.add_circle_outline,
-              color: accentColor,
-              size: 22,
-            ),
+            Icon(Icons.add_circle_outline, color: accentColor, size: 22),
             const SizedBox(width: 12),
             Text(
               wpLowercase(label),
@@ -1030,7 +1004,6 @@ class _AddButton extends StatelessWidget {
 
 class _AddPhoneDialog extends StatefulWidget {
   const _AddPhoneDialog();
-
   @override
   State<_AddPhoneDialog> createState() => _AddPhoneDialogState();
 }
@@ -1088,10 +1061,7 @@ class _AddPhoneDialogState extends State<_AddPhoneDialog> {
         final n = _ctrl.text.trim();
         if (n.isEmpty) return;
         Navigator.of(context).pop(
-          fc.Phone(
-            number: n,
-            label: fc.Label<fc.PhoneLabel>(_label),
-          ),
+          fc.Phone(number: n, label: fc.Label<fc.PhoneLabel>(_label)),
         );
       },
     );
@@ -1100,7 +1070,6 @@ class _AddPhoneDialogState extends State<_AddPhoneDialog> {
 
 class _AddEmailDialog extends StatefulWidget {
   const _AddEmailDialog();
-
   @override
   State<_AddEmailDialog> createState() => _AddEmailDialogState();
 }
@@ -1156,10 +1125,7 @@ class _AddEmailDialogState extends State<_AddEmailDialog> {
         final a = _ctrl.text.trim();
         if (a.isEmpty) return;
         Navigator.of(context).pop(
-          fc.Email(
-            address: a,
-            label: fc.Label<fc.EmailLabel>(_label),
-          ),
+          fc.Email(address: a, label: fc.Label<fc.EmailLabel>(_label)),
         );
       },
     );
@@ -1213,7 +1179,6 @@ class _AddTextDialogState extends State<_AddTextDialog> {
 
 class _AddAddressDialog extends StatefulWidget {
   const _AddAddressDialog();
-
   @override
   State<_AddAddressDialog> createState() => _AddAddressDialogState();
 }
@@ -1268,11 +1233,6 @@ class _AddAddressDialogState extends State<_AddAddressDialog> {
       onSave: () {
         final text = _textCtrl.text.trim();
         if (text.isEmpty) return;
-
-        // Store the whole text block in both `street` (Android's catch-all
-        // field) and `formatted` (the standard display string). Native
-        // Apps that expect structured data will just see it as one long
-        // street, which is the most graceful fallback.
         Navigator.of(context).pop(
           fc.Address(
             street: text,
@@ -1303,9 +1263,7 @@ class _EditDialogScaffold extends StatelessWidget {
     return Dialog(
       backgroundColor: const Color(0xFF1F1F1F),
       elevation: 0,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1374,8 +1332,6 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-// ── WpPicker-style modal choice dialog ──────────────────────────────
-
 class _WpPickerDialogOption<T> {
   final T id;
   final String label;
@@ -1404,9 +1360,7 @@ class _WpPickerDialog<T> extends StatelessWidget {
     return Dialog(
       backgroundColor: const Color(0xFF1F1F1F),
       elevation: 0,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1434,8 +1388,7 @@ class _WpPickerDialog<T> extends StatelessWidget {
                   splashFactory: NoSplash.splashFactory,
                   highlightColor: Colors.white.withOpacity(0.06),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Row(
                       children: [
                         Icon(

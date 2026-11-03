@@ -35,7 +35,7 @@ class _WpButtonState extends State<WpButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final foreground = enabled ? Colors.white : Colors.white30;
-    final fill = _pressed ? widget.pressedColor : Colors.black;
+    final fill = _pressed ? widget.pressedColor : Color(0xFF1F1F1F);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

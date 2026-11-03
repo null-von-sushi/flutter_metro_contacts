@@ -34,9 +34,9 @@ class WpConfirmDialog extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: Container(
         width: double.infinity,
-        // Using the app's standard dark grey. Change to Colors.black
+        // Using the app's standard dark grey 0xFF1F1F1F. Change to Colors.black
         // if you want it to match the screenshot exactly.
-        color: const Color(0xFF000000),
+        color: const Color(0xFF1F1F1F),
         child: SafeArea(
           bottom: false,
           child: Padding(

@@ -35,6 +35,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   Uint8List? _fullPhoto;
   Contact? _fullContact;
+  bool _hasChanged = false; // <-- Track if changes were made
 
   @override
   void initState() {
@@ -83,7 +84,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   void _handleBack() {
     widget.onPopStart?.call();
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(_hasChanged); // <-- Return the status
   }
 
   Future<void> _launchUri(Uri uri, String failureMessage) async {
@@ -248,11 +249,14 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           contact: c,
           settings: widget.settings,
           onSaved: () {
+            _hasChanged = true; // <-- Mark as changed
             if (mounted) {
               setState(() {
                 _fullContact = null;
+                _fullPhoto = null;
               });
               _loadFullContact();
+              _loadFullPhoto();
             }
           },
         ),
@@ -266,15 +270,28 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     showDialog(
       context: context,
       barrierColor: Colors.black54,
-      builder: (context) => WpConfirmDialog(
+      builder: (dialogContext) => WpConfirmDialog(
         title: '\nPermanently delete $displayName?',
         confirmLabel: 'delete',
         cancelLabel: 'cancel',
         dangerous: true,
-        onCancel: () => Navigator.pop(context),
-        onConfirm: () {
-          Navigator.pop(context);
-          // TODO: call FlutterContacts.delete(widget.contact.id).
+        onCancel: () => Navigator.pop(dialogContext),
+        onConfirm: () async {
+          Navigator.pop(dialogContext); // close dialog
+          try {
+            final id = widget.contact.id;
+            if (id.isEmpty) {
+              _showError('Cannot delete a contact with no ID');
+              return;
+            }
+            await FlutterContacts.delete(id);
+            if (!mounted) return;
+            _hasChanged = true; // <-- Mark as changed
+            Navigator.of(context).pop(true); // <-- Force pop with true
+          } catch (e) {
+            if (!mounted) return;
+            _showError('Failed to delete: $e');
+          }
         },
       ),
     );
