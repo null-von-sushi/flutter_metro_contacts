@@ -660,36 +660,9 @@ class _ContactEditPageState extends State<ContactEditPage> {
             ),
           ),
           const SizedBox(height: 4),
-          TextField(
+          _WpTextField(
             controller: ctrl,
-            maxLines: multiline ? null : 1,
-            minLines: multiline ? 3 : 1,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w300,
-              color: Colors.white,
-            ),
-            decoration: InputDecoration(
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.04),
-              enabledBorder: const OutlineInputBorder(
-                borderRadius: BorderRadius.zero,
-                borderSide: BorderSide(color: Colors.white24),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.zero,
-                borderSide: BorderSide(color: AccentColor, width: 2),
-              ),
-              border: const OutlineInputBorder(
-                borderRadius: BorderRadius.zero,
-                borderSide: BorderSide(color: Colors.white24),
-              ),
-            ),
+            multiline: multiline,
           ),
         ],
       ),
@@ -847,6 +820,91 @@ class _ContactEditPageState extends State<ContactEditPage> {
     final parts = s.split('.');
     final name = parts.length > 1 ? parts.last : s;
     return name.isEmpty ? 'phone' : name;
+  }
+}
+
+class _WpTextField extends StatefulWidget {
+  final TextEditingController controller;
+  final String? hint;
+  final bool multiline;
+  final bool autofocus;
+  final TextInputType? keyboardType;
+  final double fontSize;
+
+  const _WpTextField({
+    required this.controller,
+    this.hint,
+    this.multiline = false,
+    this.autofocus = false,
+    this.keyboardType,
+    this.fontSize = 20,
+  });
+
+  @override
+  State<_WpTextField> createState() => _WpTextFieldState();
+}
+
+class _WpTextFieldState extends State<_WpTextField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() {
+        _hasFocus = _focusNode.hasFocus;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: widget.controller,
+      focusNode: _focusNode,
+      autofocus: widget.autofocus,
+      maxLines: widget.multiline ? null : 1,
+      minLines: widget.multiline ? 3 : 1,
+      keyboardType: widget.keyboardType,
+      cursorColor: _hasFocus ? Colors.black : AccentColor,
+      style: TextStyle(
+        fontSize: widget.fontSize,
+        fontWeight: FontWeight.w300,
+        color: _hasFocus ? Colors.black : Colors.white,
+      ),
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: widget.hint,
+        hintStyle: TextStyle(
+          color: _hasFocus ? Colors.black54 : Colors.white38,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        filled: true,
+        fillColor: _hasFocus ? Colors.white : Colors.white.withOpacity(0.04),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: AccentColor, width: 2),
+        ),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+      ),
+    );
   }
 }
 
@@ -1021,11 +1079,12 @@ class _AddPhoneDialogState extends State<_AddPhoneDialog> {
             ],
           ),
           const SizedBox(height: 16),
-          _DialogTextField(
+          _WpTextField(
             controller: _ctrl,
             hint: 'Number',
             autofocus: true,
             keyboardType: TextInputType.phone,
+            fontSize: 18,
           ),
         ],
       ),
@@ -1088,11 +1147,12 @@ class _AddEmailDialogState extends State<_AddEmailDialog> {
             ],
           ),
           const SizedBox(height: 16),
-          _DialogTextField(
+          _WpTextField(
             controller: _ctrl,
             hint: 'Address',
             autofocus: true,
             keyboardType: TextInputType.emailAddress,
+            fontSize: 18,
           ),
         ],
       ),
@@ -1139,11 +1199,12 @@ class _AddTextDialogState extends State<_AddTextDialog> {
   Widget build(BuildContext context) {
     return _EditDialogScaffold(
       title: widget.title,
-      content: _DialogTextField(
+      content: _WpTextField(
         controller: _ctrl,
         hint: widget.hint.isEmpty ? 'Value' : widget.hint,
         autofocus: true,
         multiline: widget.multiline,
+        fontSize: 18,
       ),
       onCancel: () => Navigator.of(context).pop(),
       onSave: () {
@@ -1199,11 +1260,12 @@ class _AddAddressDialogState extends State<_AddAddressDialog> {
             ],
           ),
           const SizedBox(height: 16),
-          _DialogTextField(
+          _WpTextField(
             controller: _textCtrl,
             hint: 'Street, City, Postcode, Country...',
             autofocus: true,
             multiline: true,
+            fontSize: 18,
           ),
         ],
       ),
@@ -1311,61 +1373,6 @@ class _TypeChip extends StatelessWidget {
             fontSize: 14,
             color: selected ? Colors.white : Colors.white70,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final bool autofocus;
-  final bool multiline;
-  final TextInputType? keyboardType;
-
-  const _DialogTextField({
-    required this.controller,
-    required this.hint,
-    this.autofocus = false,
-    this.multiline = false,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      autofocus: autofocus,
-      maxLines: multiline ? null : 1,
-      minLines: multiline ? 3 : 1,
-      keyboardType: keyboardType,
-      style: const TextStyle(
-        fontSize: 18,
-        color: Colors.white,
-        fontWeight: FontWeight.w300,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 12,
-        ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
-        enabledBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: Colors.white24),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: AccentColor, width: 2),
-        ),
-        border: const OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: Colors.white24),
         ),
       ),
     );
