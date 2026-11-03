@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:wp_pivot_flutter/wp_components.dart';
 
 // Re-export the types callers need so pages only import this file.
-export 'package:wp_pivot_flutter/wp_components.dart'
-    show WpApplicationBarAction, WpApplicationBarMenuItem, WpApplicationBarMode;
+import 'custom_app_bar.dart';
+export 'custom_app_bar.dart' show WpApplicationBarAction, WpApplicationBarMenuItem, WpApplicationBarMode;
 
 /// WP-themed bottom application bar.
 ///

@@ -2,7 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
-import 'package:wp_pivot_flutter/wp_components.dart';
+import 'package:flutter_metro_contacts/widgets/custom_app_bar.dart';
+
+// ▼▼▼ Hide the original app bar so your custom one is used ▼▼▼
+import 'package:wp_pivot_flutter/wp_components.dart'
+    hide WpApplicationBar, WpApplicationBarAction, WpApplicationBarMenuItem, WpApplicationBarMode;
+// ▲▲▲
+
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
 import 'contact_details.dart';
@@ -13,6 +19,8 @@ import 'data/contact_repository.dart';
 import 'services/metrov_theme_service.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'contact_edit_page.dart';
+
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
