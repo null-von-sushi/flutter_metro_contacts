@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
+import 'package:flutter_contacts/flutter_contacts.dart' as fc show Contact;
 import 'package:url_launcher/url_launcher.dart';
 import 'data/class_contact.dart';
 import 'data/contact_repository.dart';
@@ -35,7 +36,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   Uint8List? _fullPhoto;
   Contact? _fullContact;
-  bool _hasChanged = false; // <-- Track if changes were made
+  fc.Contact? _rawFullContact; // raw flutter_contacts object for updates
+  bool _hasChanged = false;
 
   @override
   void initState() {
@@ -72,11 +74,13 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           ContactProperty.identifiers,
           ContactProperty.website,
           ContactProperty.socialMedia,
+          ContactProperty.favorite,
         },
       );
       if (full == null) return;
       if (!mounted) return;
       setState(() {
+        _rawFullContact = full;
         _fullContact = _repository.mapSingleContact(full);
       });
     } catch (_) {}
@@ -84,7 +88,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   void _handleBack() {
     widget.onPopStart?.call();
-    Navigator.of(context).pop(_hasChanged); // <-- Return the status
+    Navigator.of(context).pop(_hasChanged);
   }
 
   Future<void> _launchUri(Uri uri, String failureMessage) async {
@@ -238,6 +242,47 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(uri, 'Telegram not installed');
   }
 
+  /// Toggles the system starred flag for this contact. `flutter_contacts`
+  /// 2.6.0 exposes the flag as `android.isFavorite` rather than a
+  /// `Contact.isStarred` field, so we rebuild the AndroidData block with
+  /// the flipped value and write it back. Both `_rawFullContact` and the
+  /// local model are updated so the icon flips on the same frame.
+  Future<void> _toggleStar() async {
+    final raw = _rawFullContact;
+    if (raw == null) {
+      await _loadFullContact();
+      if (_rawFullContact == null) return;
+    }
+
+    final target = _rawFullContact!;
+    final current = target.android?.isFavorite ?? false;
+    final newValue = !current;
+
+    try {
+      final newAndroid = AndroidData(
+        isFavorite: newValue,
+        customRingtone: target.android?.customRingtone,
+        sendToVoicemail: target.android?.sendToVoicemail,
+        lastUpdatedTimestamp: target.android?.lastUpdatedTimestamp,
+        identifiers: target.android?.identifiers,
+        debugData: target.android?.debugData,
+      );
+
+      final updated = target.copyWith(android: newAndroid);
+      await FlutterContacts.update(updated);
+
+      if (!mounted) return;
+      HapticFeedback.lightImpact();
+      setState(() {
+        _hasChanged = true;
+        _rawFullContact = updated;
+        _fullContact = _fullContact?.copyWith(isStarred: newValue);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Failed to update favorite: $e');
+    }
+  }
 
   void _handleEdit() {
     final c = _fullContact ?? widget.contact;
@@ -249,11 +294,12 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           contact: c,
           settings: widget.settings,
           onSaved: () {
-            _hasChanged = true; // <-- Mark as changed
+            _hasChanged = true;
             if (mounted) {
               setState(() {
                 _fullContact = null;
                 _fullPhoto = null;
+                _rawFullContact = null;
               });
               _loadFullContact();
               _loadFullPhoto();
@@ -277,7 +323,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         dangerous: true,
         onCancel: () => Navigator.pop(dialogContext),
         onConfirm: () async {
-          Navigator.pop(dialogContext); // close dialog
+          Navigator.pop(dialogContext);
           try {
             final id = widget.contact.id;
             if (id.isEmpty) {
@@ -286,8 +332,8 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
             }
             await FlutterContacts.delete(id);
             if (!mounted) return;
-            _hasChanged = true; // <-- Mark as changed
-            Navigator.of(context).pop(true); // <-- Force pop with true
+            _hasChanged = true;
+            Navigator.of(context).pop(true);
           } catch (e) {
             if (!mounted) return;
             _showError('Failed to delete: $e');
@@ -555,6 +601,14 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
           index: bottomBarIndex,
           child: WpBottomAppBar(
             actions: [
+              WpApplicationBarAction(
+                icon: Icon(
+                  c.isStarred ? Icons.star : Icons.star_border,
+                  size: 20,
+                ),
+                label: c.isStarred ? 'unstar' : 'star',
+                onPressed: _toggleStar,
+              ),
               WpApplicationBarAction(
                 icon: const Icon(Icons.edit_outlined, size: 20),
                 label: 'edit',

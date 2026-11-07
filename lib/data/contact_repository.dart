@@ -60,6 +60,7 @@ class ContactRepository {
         ContactProperty.identifiers,
         ContactProperty.website,
         ContactProperty.socialMedia,
+        ContactProperty.favorite, // star flag (Android only)
       },
     );
 
@@ -141,6 +142,7 @@ class ContactRepository {
       photo: c.photo?.thumbnail,
       photoFull: null,
       isMe: isMe,
+      isStarred: c.android?.isFavorite ?? false,
       phones: _mapPhones(c),
       emails: _mapEmails(c),
       addresses: _mapAddresses(c),

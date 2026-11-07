@@ -235,6 +235,114 @@ class _PeoplePageState extends State<PeoplePage>
     );
   }
 
+  // ── Tab content builders ────────────────────────────────────────────
+
+  Widget _buildLoading() {
+    return SizedBox.expand(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: SizedBox(
+            width: double.infinity,
+            height: 4,
+            child: WpProgressBar(
+              semanticLabel: 'Loading contacts',
+              color: AccentColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return const Center(
+      child: Text(
+        'Failed to load contacts',
+        style: TextStyle(color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildAllTab() {
+    return FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
+      future: _allPivotFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoading();
+        }
+        if (snapshot.hasError) {
+          return _buildError();
+        }
+        final data = snapshot.data;
+        if (data == null || data.contacts.isEmpty) {
+          return const Center(
+            child: Text(
+              'No contacts match the current filter.',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+        return ContactList(
+          contacts: data.contacts,
+          meContact: data.meContact,
+          onContactTap: _openDetails,
+          settings: widget.settings,
+        );
+      },
+    );
+  }
+
+  Widget _buildFavoritesTab() {
+    return FutureBuilder<({List<Contact> contacts, Contact? meContact})>(
+      future: _allPivotFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoading();
+        }
+        if (snapshot.hasError) {
+          return _buildError();
+        }
+        final data = snapshot.data;
+        if (data == null) {
+          return _buildError();
+        }
+
+        final favorites = data.contacts
+            .where((c) => c.isStarred)
+            .toList();
+
+        final me = data.meContact;
+        final starredMe = (me != null && me.isStarred) ? me : null;
+
+        if (favorites.isEmpty && starredMe == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 48),
+              child: Text(
+                'No favorites yet.\nStar a contact from its details page to add it here.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white54,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return ContactList(
+          contacts: favorites,
+          meContact: starredMe,
+          onContactTap: _openDetails,
+          settings: widget.settings,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final route = ModalRoute.of(context);
@@ -255,52 +363,8 @@ class _PeoplePageState extends State<PeoplePage>
               tabTitles: const ['all', 'favorites', 'recent'],
               wrap: true,
               children: [
-                FutureBuilder<
-                    ({List<Contact> contacts, Contact? meContact})>(
-                  future: _allPivotFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return SizedBox.expand(
-                        child: Center(
-                          child: Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 48),
-                            child: SizedBox(
-                              width: double.infinity,
-                              height: 4,
-                              child: WpProgressBar(
-                                semanticLabel: 'Loading contacts',
-                                color: AccentColor,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return const Center(
-                        child: Text('Failed to load contacts',
-                            style: TextStyle(color: Colors.white)),
-                      );
-                    }
-                    final data = snapshot.data;
-                    if (data == null || data.contacts.isEmpty) {
-                      return const Center(
-                        child: Text(
-                          'No contacts match the current filter.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      );
-                    }
-                    return ContactList(
-                      contacts: data.contacts,
-                      meContact: data.meContact,
-                      onContactTap: _openDetails,
-                      settings: widget.settings,
-                    );
-                  },
-                ),
-                ContactList(contacts: const [], settings: widget.settings),
+                _buildAllTab(),
+                _buildFavoritesTab(),
                 ContactList(contacts: const [], settings: widget.settings),
               ],
             ),

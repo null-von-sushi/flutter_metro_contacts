@@ -41,6 +41,10 @@ class Contact {
   final Uint8List? photoFull;
   final bool isMe;
 
+  /// Whether this contact is starred/favorited in the system contact
+  /// store. Android-only; always false on iOS.
+  final bool isStarred;
+
   final List<ContactPhone> phones;
   final List<ContactEmail> emails;
   final List<ContactAddress> addresses;
@@ -69,6 +73,7 @@ class Contact {
     this.photo,
     this.photoFull,
     this.isMe = false,
+    this.isStarred = false,
     this.phones = const [],
     this.emails = const [],
     this.addresses = const [],
@@ -94,6 +99,7 @@ class Contact {
     Uint8List? photo,
     Uint8List? photoFull,
     bool? isMe,
+    bool? isStarred,
     List<ContactPhone>? phones,
     List<ContactEmail>? emails,
     List<ContactAddress>? addresses,
@@ -118,6 +124,7 @@ class Contact {
       photo: photo ?? this.photo,
       photoFull: photoFull ?? this.photoFull,
       isMe: isMe ?? this.isMe,
+      isStarred: isStarred ?? this.isStarred,
       phones: phones ?? this.phones,
       emails: emails ?? this.emails,
       addresses: addresses ?? this.addresses,
