@@ -9,6 +9,7 @@ import 'other/constants.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/wp_button.dart';
+import 'widgets/wp_picker.dart';
 
 const _packageCheckChannel = MethodChannel(
   'com.example.flutter_metro_contacts/package_check',
@@ -71,9 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
           final a = raw as Account?;
           if (a == null) continue;
           if (ContactRepository.accountKey(a) == accountId) {
-            accountName = (a.name.isNotEmpty)
-                ? a.name
-                : (a.type);
+            accountName = (a.name.isNotEmpty) ? a.name : (a.type);
             break;
           }
         }
@@ -164,9 +163,7 @@ class _SettingsPageState extends State<SettingsPage> {
             if (raw != null)
               _ChoiceOption<String>(
                 id: ContactRepository.accountKey(raw),
-                label: (raw.name.isNotEmpty)
-                    ? raw.name
-                    : (raw.type),
+                label: (raw.name.isNotEmpty) ? raw.name : (raw.type),
                 subtitle: raw.type,
               ),
         ],
@@ -345,32 +342,37 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListView(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       children: [
-                        // ── NAMES ───────────────────────────────────
-                        const FeatherLayer(
-                          index: 1,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'NAMES',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
+                        // ── CONTACT LIST FILTER ─────────────────────
+                        FeatherLayer(
+                          index: 2,
+                          child: WpPicker(
+                            label: 'only show account',
+                            value: accountLabel,
+                            onTap: _pickAccount,
                           ),
                         ),
                         FeatherLayer(
-                          index: 2,
+                          index: 3,
+                          child: WpPicker(
+                            label: 'only show group',
+                            value: groupLabel,
+                            onTap: widget.settings.accountFilter.value != null
+                                ? _pickGroup
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── NAMES ───────────────────────────────────
+                        FeatherLayer(
+                          index: 5,
                           child: Padding(
                             padding:
                             const EdgeInsets.symmetric(horizontal: 16.0),
                             child: ValueListenableBuilder<bool>(
                               valueListenable: widget.settings.surnameFirst,
                               builder: (context, value, _) => WpToggleSwitch(
-                                header: 'Always show surname first',
+                                header: 'always display last name first',
                                 value: value,
                                 accentColor: AccentColor,
                                 onChanged: (v) =>
@@ -381,60 +383,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // ── SHOWING ─────────────────────────────────
-                        const FeatherLayer(
-                          index: 3,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'SHOWING',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
-                        FeatherLayer(
-                          index: 4,
-                          child: _FilterRow(
-                            label: 'account',
-                            value: accountLabel,
-                            onTap: _pickAccount,
-                          ),
-                        ),
-                        FeatherLayer(
-                          index: 5,
-                          child: _FilterRow(
-                            label: 'group',
-                            value: groupLabel,
-                            onTap: widget.settings.accountFilter.value != null
-                                ? _pickGroup
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
                         // ── CONTACT DISPLAY ─────────────────────────
-                        const FeatherLayer(
-                          index: 6,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'CONTACT DISPLAY',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
                         FeatherLayer(
                           index: 7,
                           child: Padding(
@@ -444,8 +393,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               valueListenable:
                               widget.settings.prioritizeNicknames,
                               builder: (context, value, _) => WpToggleSwitch(
-                                header:
-                                'Prioritize Nicknames instead of legal names',
+                                header: 'show nicknames large',
                                 value: value,
                                 accentColor: AccentColor,
                                 onChanged: (v) =>
@@ -458,22 +406,6 @@ class _SettingsPageState extends State<SettingsPage> {
                         const SizedBox(height: 16),
 
                         // ── THEMING ─────────────────────────────────
-                        const FeatherLayer(
-                          index: 8,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 16.0, vertical: 8.0),
-                            child: Text(
-                              'THEMING',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.2,
-                                color: Colors.white54,
-                              ),
-                            ),
-                          ),
-                        ),
                         FeatherLayer(
                           index: 9,
                           child: Padding(
@@ -483,7 +415,8 @@ class _SettingsPageState extends State<SettingsPage> {
                               valueListenable:
                               widget.settings.parseNotesForAccentColor,
                               builder: (context, value, _) => WpToggleSwitch(
-                                header: 'Parse Notes for Accent Color',
+                                header:
+                                'use favorite color of contact for accent (notes section)',
                                 accentColor: AccentColor,
                                 value: value,
                                 onChanged: (v) => widget
@@ -494,7 +427,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         FeatherLayer(
                           index: 10,
-                          child: _FilterRow(
+                          child: WpPicker(
                             label: 'accent colour',
                             value: accentName,
                             leadingSwatch: Color(selectedArgb),
@@ -515,7 +448,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                     widget.settings.useLauncherAccent,
                                     builder: (context, value, _) =>
                                         WpToggleSwitch(
-                                          header: 'Use MetroV launcher accent',
+                                          header: 'use metrov launcher accent',
                                           value: value,
                                           accentColor: AccentColor,
                                           onChanged: (v) => widget
@@ -540,7 +473,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       Expanded(
                                         child: Text(
                                           MetrovAccent == null
-                                              ? 'launcher accent: not read'
+                                              ? 'error getting launcher accent'
                                               : 'launcher accent: '
                                               '${_hexOf(MetrovAccent!)}',
                                           style: const TextStyle(
@@ -588,73 +521,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final VoidCallback? onTap;
-  final Color? leadingSwatch;
-
-  const _FilterRow({
-    required this.label,
-    required this.value,
-    this.onTap,
-    this.leadingSwatch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    return InkWell(
-      onTap: onTap,
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.white.withOpacity(0.06),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 116,
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.white54,
-                ),
-              ),
-            ),
-            if (leadingSwatch != null) ...[
-              Container(
-                width: 16,
-                height: 16,
-                color: leadingSwatch,
-              ),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w300,
-                  color: enabled ? Colors.white : Colors.white30,
-                ),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: enabled ? Colors.white38 : Colors.white12,
-              size: 20,
             ),
           ],
         ),

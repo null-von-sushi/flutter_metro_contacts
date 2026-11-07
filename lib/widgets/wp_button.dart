@@ -35,7 +35,7 @@ class _WpButtonState extends State<WpButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     final foreground = enabled ? Colors.white : Colors.white30;
-    final fill = _pressed ? widget.pressedColor : Colors.black;
+    final fill = _pressed ? widget.pressedColor : Color(0xFF1F1F1F);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -46,12 +46,14 @@ class _WpButtonState extends State<WpButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 50),
         padding: widget.padding,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: fill,
           border: Border.all(color: foreground, width: widget.borderWidth),
         ),
         child: Text(
           widget.label,
+          textAlign: TextAlign.center,
           style: TextStyle(
             color: foreground,
             fontSize: widget.fontSize,

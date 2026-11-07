@@ -2,7 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
-import 'package:wp_pivot_flutter/wp_components.dart';
+import 'package:flutter_metro_contacts/widgets/custom_app_bar.dart';
+
+// ▼▼▼ Hide the original app bar so your custom one is used ▼▼▼
+import 'package:wp_pivot_flutter/wp_components.dart'
+    hide WpApplicationBar, WpApplicationBarAction, WpApplicationBarMenuItem, WpApplicationBarMode;
+// ▲▲▲
+
 import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
 import 'contact_details.dart';
@@ -12,6 +18,9 @@ import 'other/settings.dart';
 import 'data/contact_repository.dart';
 import 'services/metrov_theme_service.dart';
 import 'transitions/wp_phone_transition.dart';
+import 'contact_edit_page.dart';
+
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -182,9 +191,11 @@ class _PeoplePageState extends State<PeoplePage>
     );
   }
 
-  void _openDetails(Contact contact) {
+  Future<void> _openDetails(Contact contact) async {
     _exitController.forward();
-    Navigator.of(context).push(
+
+    // Note: Removed <bool> here
+    final changed = await Navigator.of(context).push(
       WpPhonePageRoute(
         incomingMaxIndex: contact.detailsMaxIndex,
         outgoingMaxIndex: _homeMaxIndex,
@@ -195,26 +206,31 @@ class _PeoplePageState extends State<PeoplePage>
         ),
       ),
     );
+
+    if (changed == true && mounted) {
+      setState(() {
+        _allPivotFuture = _fetchFiltered();
+      });
+    }
   }
 
   void _addNewContact() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('New Contact'),
-        content: const Text('Add contact form will go here.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Save', style: TextStyle(color: AccentColor)),
-          ),
-        ],
+    _exitController.forward();
+    Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: 3,
+        outgoingMaxIndex: _homeMaxIndex,
+        builder: (_) => ContactEditPage(
+          settings: widget.settings,
+          onPopStart: _exitController.reverse,
+          onSaved: () {
+            if (mounted) {
+              setState(() {
+                _allPivotFuture = _fetchFiltered();
+              });
+            }
+          },
+        ),
       ),
     );
   }

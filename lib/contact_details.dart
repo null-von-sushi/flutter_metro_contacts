@@ -10,8 +10,9 @@ import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'transitions/wp_phone_transition.dart';
 import 'widgets/bottom_app_bar.dart';
-import 'widgets/wp_button.dart';
+import 'widgets/wp_confirm_dialog.dart';
 import 'other/wp_text.dart';
+import 'contact_edit_page.dart';
 
 class ContactDetailsPage extends StatefulWidget {
   final Contact contact;
@@ -34,6 +35,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   Uint8List? _fullPhoto;
   Contact? _fullContact;
+  bool _hasChanged = false; // <-- Track if changes were made
 
   @override
   void initState() {
@@ -82,7 +84,7 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
 
   void _handleBack() {
     widget.onPopStart?.call();
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(_hasChanged); // <-- Return the status
   }
 
   Future<void> _launchUri(Uri uri, String failureMessage) async {
@@ -236,24 +238,28 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
     _launchUri(uri, 'Telegram not installed');
   }
 
+
   void _handleEdit() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        title: const Text('Edit Contact'),
-        content: const Text('Edit form will go here.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: Colors.white70)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Save', style: TextStyle(color: AccentColor)),
-          ),
-        ],
+    final c = _fullContact ?? widget.contact;
+    Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: 3,
+        outgoingMaxIndex: c.detailsMaxIndex,
+        builder: (_) => ContactEditPage(
+          contact: c,
+          settings: widget.settings,
+          onSaved: () {
+            _hasChanged = true; // <-- Mark as changed
+            if (mounted) {
+              setState(() {
+                _fullContact = null;
+                _fullPhoto = null;
+              });
+              _loadFullContact();
+              _loadFullPhoto();
+            }
+          },
+        ),
       ),
     );
   }
@@ -263,49 +269,30 @@ class _ContactDetailsPageState extends State<ContactDetailsPage> {
         .nameFor(widget.settings.surnameFirst.value);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1F1F1F),
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Permanently delete $displayName?',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                  height: 1.3,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  WpButton(
-                    label: 'cancel',
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 12),
-                  WpButton(
-                    label: 'delete',
-                    pressedColor: Colors.red.shade700,
-                    onPressed: () {
-                      Navigator.pop(context);
-                      // TODO: call FlutterContacts.delete(widget.contact.id).
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      barrierColor: Colors.black54,
+      builder: (dialogContext) => WpConfirmDialog(
+        title: '\nPermanently delete $displayName?',
+        confirmLabel: 'delete',
+        cancelLabel: 'cancel',
+        dangerous: true,
+        onCancel: () => Navigator.pop(dialogContext),
+        onConfirm: () async {
+          Navigator.pop(dialogContext); // close dialog
+          try {
+            final id = widget.contact.id;
+            if (id.isEmpty) {
+              _showError('Cannot delete a contact with no ID');
+              return;
+            }
+            await FlutterContacts.delete(id);
+            if (!mounted) return;
+            _hasChanged = true; // <-- Mark as changed
+            Navigator.of(context).pop(true); // <-- Force pop with true
+          } catch (e) {
+            if (!mounted) return;
+            _showError('Failed to delete: $e');
+          }
+        },
       ),
     );
   }
