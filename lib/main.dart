@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' hide Contact;
 import 'package:flutter_metro_contacts/widgets/contact_list.dart';
 import 'package:flutter_metro_contacts/widgets/bottom_app_bar.dart';
 import 'package:flutter_metro_contacts/widgets/custom_app_bar.dart';
@@ -13,6 +14,9 @@ import 'package:wp_pivot_flutter/wp_pivot_flutter.dart';
 import 'settings_page.dart';
 import 'contact_details.dart';
 import 'data/class_contact.dart';
+import 'data/group_query.dart';
+import 'group_contacts_page.dart';
+import 'groups_list.dart';
 import 'other/accent_color.dart';
 import 'other/settings.dart';
 import 'data/contact_repository.dart';
@@ -132,6 +136,7 @@ class _PeoplePageState extends State<PeoplePage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _exitController;
   late Future<({List<Contact> contacts, Contact? meContact})> _allPivotFuture;
+  late Future<List<GroupEntry>> _groupsFuture;
   final _contactRepository = ContactRepository();
 
   late final Listenable _filterListenable;
@@ -152,13 +157,16 @@ class _PeoplePageState extends State<PeoplePage>
       widget.settings.groupFilter,
     ]);
     _filterListenable.addListener(_onFilterChanged);
+    widget.settings.accountFilter.addListener(_onAccountFilterChanged);
 
     _allPivotFuture = _fetchFiltered();
+    _groupsFuture = _fetchGroups();
   }
 
   @override
   void dispose() {
     _filterListenable.removeListener(_onFilterChanged);
+    widget.settings.accountFilter.removeListener(_onAccountFilterChanged);
     _exitController.dispose();
     super.dispose();
   }
@@ -170,11 +178,58 @@ class _PeoplePageState extends State<PeoplePage>
     });
   }
 
+  void _onAccountFilterChanged() {
+    if (!mounted) return;
+    setState(() {
+      _groupsFuture = _fetchGroups();
+    });
+  }
+
   Future<({List<Contact> contacts, Contact? meContact})> _fetchFiltered() {
     return _contactRepository.fetchContacts(
       accountId: widget.settings.accountFilter.value,
       groupId: widget.settings.groupFilter.value,
     );
+  }
+
+  Future<List<GroupEntry>> _fetchGroups() async {
+    final status = await FlutterContacts.permissions.request(
+      PermissionType.readWrite,
+    );
+    if (status != PermissionStatus.granted) return const [];
+
+    final all = await GroupQuery.fetchAll();
+    if (all.isEmpty) return const [];
+
+    final filterAccount = widget.settings.accountFilter.value;
+    final filtered = filterAccount == null
+        ? all
+        : all.where((g) => g.accountKey == filterAccount).toList();
+
+    final entries = await Future.wait(filtered.map(_queryGroupCount));
+    final nonEmpty = entries.where((e) => e.contactCount > 0).toList()
+      ..sort((a, b) {
+        final byTitle = a.group.title
+            .toLowerCase()
+            .compareTo(b.group.title.toLowerCase());
+        if (byTitle != 0) return byTitle;
+        return a.group.accountName
+            .toLowerCase()
+            .compareTo(b.group.accountName.toLowerCase());
+      });
+    return nonEmpty;
+  }
+
+  Future<GroupEntry> _queryGroupCount(NativeGroup g) async {
+    try {
+      final contacts = await FlutterContacts.getAll(
+        properties: {ContactProperty.identifiers},
+        filter: ContactFilter.group(g.id),
+      ).timeout(const Duration(seconds: 5));
+      return GroupEntry(group: g, contactCount: contacts.length);
+    } catch (_) {
+      return GroupEntry(group: g, contactCount: 0);
+    }
   }
 
   void _openSettings() {
@@ -194,7 +249,6 @@ class _PeoplePageState extends State<PeoplePage>
   Future<void> _openDetails(Contact contact) async {
     _exitController.forward();
 
-    // Note: Removed <bool> here
     final changed = await Navigator.of(context).push(
       WpPhonePageRoute(
         incomingMaxIndex: contact.detailsMaxIndex,
@@ -210,6 +264,28 @@ class _PeoplePageState extends State<PeoplePage>
     if (changed == true && mounted) {
       setState(() {
         _allPivotFuture = _fetchFiltered();
+        _groupsFuture = _fetchGroups();
+      });
+    }
+  }
+
+  Future<void> _openGroup(NativeGroup group) async {
+    _exitController.forward();
+    final changed = await Navigator.of(context).push(
+      WpPhonePageRoute(
+        incomingMaxIndex: groupContactsMaxIndex,
+        outgoingMaxIndex: _homeMaxIndex,
+        builder: (_) => GroupContactsPage(
+          group: group,
+          settings: widget.settings,
+          onPopStart: _exitController.reverse,
+        ),
+      ),
+    );
+    if (changed == true && mounted) {
+      setState(() {
+        _allPivotFuture = _fetchFiltered();
+        _groupsFuture = _fetchGroups();
       });
     }
   }
@@ -227,6 +303,7 @@ class _PeoplePageState extends State<PeoplePage>
             if (mounted) {
               setState(() {
                 _allPivotFuture = _fetchFiltered();
+                _groupsFuture = _fetchGroups();
               });
             }
           },
@@ -343,6 +420,38 @@ class _PeoplePageState extends State<PeoplePage>
     );
   }
 
+  Widget _buildGroupsTab() {
+    return FutureBuilder<List<GroupEntry>>(
+      future: _groupsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoading();
+        }
+        if (snapshot.hasError) {
+          return _buildError();
+        }
+        final groups = snapshot.data ?? const [];
+        if (groups.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 48),
+              child: Text(
+                'No groups with contacts in this account.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white70,
+                ),
+              ),
+            ),
+          );
+        }
+        return GroupsList(groups: groups, onGroupTap: _openGroup);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final route = ModalRoute.of(context);
@@ -360,12 +469,12 @@ class _PeoplePageState extends State<PeoplePage>
             index: 0,
             child: WpPivotView(
               title: 'PEOPLE',
-              tabTitles: const ['all', 'favorites', 'recent'],
+              tabTitles: const ['all', 'favorites', 'groups'],
               wrap: true,
               children: [
                 _buildAllTab(),
                 _buildFavoritesTab(),
-                ContactList(contacts: const [], settings: widget.settings),
+                _buildGroupsTab(),
               ],
             ),
           ),
